@@ -78,6 +78,11 @@ def zone_entry():
 # ------------------------------------------------------------
 @app.route("/rate-entry", methods=["GET", "POST"])
 def rate_entry():
+
+    def num(value):
+        value = str(value).strip()
+        return None if value == "" else float(value)
+
     db = get_db_connection()
     cursor = db.cursor()
 
@@ -96,89 +101,172 @@ def rate_entry():
 
     # ----- POST (Add / Edit / Delete) -----
     if request.method == "POST":
+
         action = request.form.get("_action", "add")
 
+        # ----- DELETE -----
         if action == "delete":
-            cursor.execute("DELETE FROM rates WHERE id=%s", (request.form["del_id"],))
+            cursor.execute(
+                "DELETE FROM rates WHERE id=%s",
+                (request.form["del_id"],)
+            )
+
             db.commit()
             db.close()
-            return redirect(url_for('rate_entry', search=search, limit=limit_str, page=page))
 
+            return redirect(url_for(
+                'rate_entry',
+                search=search,
+                limit=limit_str,
+                page=page
+            ))
+
+        # ----- ZONE -----
         zone = int(request.form.get("zone") or 5)
 
+        # ----- COMMON VALUES -----
+        code = request.form.get("code", "").strip()
+        code_fullform = request.form.get("code_fullform", "").strip()
+        place = request.form.get("place", "").strip()
+
+        rate_250g = num(request.form.get("rate_250g", ""))
+        rate_500g = num(request.form.get("rate_500g", ""))
+        rate_500g_1 = num(request.form.get("rate_500g_1", ""))
+        rate_1_to_3kg = num(request.form.get("rate_1_to_3kg", ""))
+        rate_3_to_10kg = num(request.form.get("rate_3_to_10kg", ""))
+        rate_above_10kg = num(request.form.get("rate_above_10kg", ""))
+        fuel = num(request.form.get("fuel", ""))
+
+        # ----- EDIT -----
         if action == "edit":
+
             cursor.execute("""
                 UPDATE rates SET
-                    code=%s, code_fullform=%s, place=%s, zone=%s,
-                    rate_250g=%s, rate_500g=%s, rate_500g_1=%s,
-                    rate_1_to_3kg=%s, rate_3_to_10kg=%s,
-                    rate_above_10kg=%s, fuel=%s
+                    code=%s,
+                    code_fullform=%s,
+                    place=%s,
+                    zone=%s,
+                    rate_250g=%s,
+                    rate_500g=%s,
+                    rate_500g_1=%s,
+                    rate_1_to_3kg=%s,
+                    rate_3_to_10kg=%s,
+                    rate_above_10kg=%s,
+                    fuel=%s
                 WHERE id=%s
             """, (
-                request.form["code"],
-                request.form["code_fullform"],
-                request.form["place"],
+                code,
+                code_fullform,
+                place,
                 zone,
-                request.form["rate_250g"],
-                request.form["rate_500g"],
-                request.form["rate_500g_1"],
-                request.form["rate_1_to_3kg"],
-                request.form["rate_3_to_10kg"],
-                request.form["rate_above_10kg"],
-                request.form["fuel"],
+                rate_250g,
+                rate_500g,
+                rate_500g_1,
+                rate_1_to_3kg,
+                rate_3_to_10kg,
+                rate_above_10kg,
+                fuel,
                 request.form["edit_id"]
             ))
-        else:  # add
+
+        # ----- ADD -----
+        else:
+
             cursor.execute("""
-                INSERT INTO rates
-                (code, code_fullform, place, zone, rate_250g, rate_500g, rate_500g_1,
-                 rate_1_to_3kg, rate_3_to_10kg, rate_above_10kg, fuel)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO rates (
+                    code,
+                    code_fullform,
+                    place,
+                    zone,
+                    rate_250g,
+                    rate_500g,
+                    rate_500g_1,
+                    rate_1_to_3kg,
+                    rate_3_to_10kg,
+                    rate_above_10kg,
+                    fuel
+                )
+                VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                )
             """, (
-                request.form["code"],
-                request.form["code_fullform"],
-                request.form["place"],
+                code,
+                code_fullform,
+                place,
                 zone,
-                request.form["rate_250g"],
-                request.form["rate_500g"],
-                request.form["rate_500g_1"],
-                request.form["rate_1_to_3kg"],
-                request.form["rate_3_to_10kg"],
-                request.form["rate_above_10kg"],
-                request.form["fuel"]
+                rate_250g,
+                rate_500g,
+                rate_500g_1,
+                rate_1_to_3kg,
+                rate_3_to_10kg,
+                rate_above_10kg,
+                fuel
             ))
 
         db.commit()
         db.close()
-        return redirect(url_for('rate_entry', search=search, limit=limit_str, page=1))
+
+        return redirect(url_for(
+            'rate_entry',
+            search=search,
+            limit=limit_str,
+            page=1
+        ))
 
     # ----- GET: fetch records with pagination -----
+
     base_query = "FROM rates"
     params = []
+
     if search:
-        base_query += " WHERE code LIKE %s OR code_fullform LIKE %s OR place LIKE %s"
+        base_query += """
+            WHERE code ILIKE %s
+            OR code_fullform ILIKE %s
+            OR place ILIKE %s
+        """
+
         like = f"%{search}%"
         params = [like, like, like]
 
-    cursor.execute(f"SELECT COUNT(*) AS total {base_query}", params)
+    # ----- TOTAL COUNT -----
+    cursor.execute(
+        f"SELECT COUNT(*) AS total {base_query}",
+        params
+    )
+
     total = cursor.fetchone()["total"]
 
+    # ----- PAGINATION -----
     if limit:
+
         offset = (page - 1) * limit
+
         query = f"""
-            SELECT * {base_query}
+            SELECT *
+            {base_query}
             ORDER BY id DESC
             LIMIT %s OFFSET %s
         """
+
         cursor.execute(query, params + [limit, offset])
+
         total_pages = (total + limit - 1) // limit
+
     else:
-        query = f"SELECT * {base_query} ORDER BY id DESC"
+
+        query = f"""
+            SELECT *
+            {base_query}
+            ORDER BY id DESC
+        """
+
         cursor.execute(query, params)
+
         total_pages = 1
         page = 1
 
     rates = [dict(r) for r in cursor.fetchall()]
+
     db.close()
 
     return render_template(
@@ -196,58 +284,173 @@ def rate_entry():
 # ------------------------------------------------------------
 @app.route("/booking-entry", methods=["GET", "POST"])
 def booking_entry():
+
+    # ---------- HELPERS ----------
+    def txt(value):
+        return str(value).strip()
+
+    def num(value):
+        value = str(value).strip()
+        return 0 if value == "" else float(value)
+
+    def to_date(value):
+        value = str(value).strip()
+        return None if value == "" else value
+
+    # ---------- POST ----------
     if request.method == "POST":
+
         db = get_db_connection()
         cursor = db.cursor()
+
         action = request.form.get("_action", "add")
 
+        # ---------- DELETE ----------
         if action == "delete":
+
             del_id = request.form.get("del_id")
+
             if del_id:
-                cursor.execute("DELETE FROM bookings WHERE id=%s", (del_id,))
+                cursor.execute(
+                    "DELETE FROM bookings WHERE id=%s",
+                    (del_id,)
+                )
+
                 db.commit()
+
             db.close()
+
             return redirect("/booking-entry?view=recent")
 
-        code = request.form.get("code", "")
-        booking_date = request.form.get("booking_date", "")
-        awb_no = request.form.get("awb_no", "")
-        destination = request.form.get("destination", "")
-        weight = float(request.form.get("weight") or 0)
-        courier = request.form.get("courier", "")
-        zone = request.form.get("zone", "")
-        auto_amount = float(request.form.get("auto_amount") or 0)
-        fuel = float(request.form.get("fuel") or 0)
-        total_amount = auto_amount + fuel
-        client_name = request.form.get("client_name", "")
-        inv_no = request.form.get("inv_no", "")
-        inv_date = request.form.get("inv_date", "")
+        # ---------- FORM VALUES ----------
+        code = txt(request.form.get("code"))
 
+        booking_date = to_date(
+            request.form.get("booking_date")
+        )
+
+        awb_no = txt(request.form.get("awb_no"))
+
+        destination = txt(
+            request.form.get("destination")
+        )
+
+        weight = num(
+            request.form.get("weight")
+        )
+
+        courier = txt(
+            request.form.get("courier")
+        )
+
+        zone = txt(
+            request.form.get("zone")
+        )
+
+        auto_amount = num(
+            request.form.get("auto_amount")
+        )
+
+        fuel = num(
+            request.form.get("fuel")
+        )
+
+        total_amount = auto_amount + fuel
+
+        client_name = txt(
+            request.form.get("client_name")
+        )
+
+        inv_no = txt(
+            request.form.get("inv_no")
+        )
+
+        inv_date = to_date(
+            request.form.get("inv_date")
+        )
+
+        # ---------- EDIT ----------
         if action == "edit":
+
             edit_id = request.form.get("edit_id")
+
             cursor.execute("""
                 UPDATE bookings SET
-                    code=%s, booking_date=%s, awb_no=%s, destination=%s,
-                    weight=%s, courier=%s, zone=%s, auto_amount=%s,
-                    fuel=%s, total_amount=%s, client_name=%s,
-                    inv_no=%s, inv_date=%s
+                    code=%s,
+                    booking_date=%s,
+                    awb_no=%s,
+                    destination=%s,
+                    weight=%s,
+                    courier=%s,
+                    zone=%s,
+                    auto_amount=%s,
+                    fuel=%s,
+                    total_amount=%s,
+                    client_name=%s,
+                    inv_no=%s,
+                    inv_date=%s
                 WHERE id=%s
-            """, (code, booking_date, awb_no, destination, weight,
-                  courier, zone, auto_amount, fuel, total_amount,
-                  client_name, inv_no, inv_date, edit_id))
+            """, (
+                code,
+                booking_date,
+                awb_no,
+                destination,
+                weight,
+                courier,
+                zone,
+                auto_amount,
+                fuel,
+                total_amount,
+                client_name,
+                inv_no,
+                inv_date,
+                edit_id
+            ))
+
+        # ---------- ADD ----------
         else:
+
             cursor.execute("""
-                INSERT INTO bookings
-                (code, booking_date, awb_no, destination, weight, courier, zone,
-                 auto_amount, fuel, total_amount, client_name, inv_no, inv_date)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (code, booking_date, awb_no, destination, weight, courier, zone,
-                  auto_amount, fuel, total_amount, client_name, inv_no, inv_date))
+                INSERT INTO bookings (
+                    code,
+                    booking_date,
+                    awb_no,
+                    destination,
+                    weight,
+                    courier,
+                    zone,
+                    auto_amount,
+                    fuel,
+                    total_amount,
+                    client_name,
+                    inv_no,
+                    inv_date
+                )
+                VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                )
+            """, (
+                code,
+                booking_date,
+                awb_no,
+                destination,
+                weight,
+                courier,
+                zone,
+                auto_amount,
+                fuel,
+                total_amount,
+                client_name,
+                inv_no,
+                inv_date
+            ))
 
         db.commit()
         db.close()
+
         return redirect("/booking-entry?view=recent")
 
+    # ---------- GET ----------
     return render_template("booking_entry.html")
 
 # ------------------------------------------------------------
