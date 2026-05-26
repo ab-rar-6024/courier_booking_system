@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h4>Sales Checking</h4>
+
+<form method="post" class="card p-3 mb-3">
+<div class="row g-2">
+
+<div class="col-md-2">
+    <label>Client Name</label>
+    <input name="client_name" class="form-control" value="{{ filters.client_name }}">
+</div>
+<div class="col-md-2">
+    <label>AWB No</label>
+    <input name="awb_no" class="form-control" value="{{ filters.awb_no }}">
+</div>
+<div class="col-md-2">
+    <label>Destination</label>
+    <input name="destination" class="form-control" value="{{ filters.destination }}">
+</div>
+<div class="col-md-2">
+    <label>From Date</label>
+    <input type="date" name="from_date" class="form-control" value="{{ filters.from_date }}">
+</div>
+<div class="col-md-2">
+    <label>To Date</label>
+    <input type="date" name="to_date" class="form-control" value="{{ filters.to_date }}">
+</div>
+<div class="col-md-2 d-flex align-items-end">
+    <button class="btn btn-primary w-100">
+        <i class="fa fa-filter"></i> Filter
+    </button>
+</div>
+
+</div>
+</form>
+
+<form method="post" action="/sales-export">
+{% for k, v in filters.items() %}
+<input type="hidden" name="{{ k }}" value="{{ v }}">
+{% endfor %}
+<button class="btn btn-success mb-2">
+    <i class="fa fa-file-excel"></i> Export to Excel
+</button>
+</form>
+
+<div class="card p-3">
+<table class="table table-bordered table-sm">
+<thead class="table-dark">
+<tr>
+<th>SNO</th><th>Client Name</th><th>AWB No</th><th>Destination</th><th>Sum</th><th>Amount</th>
+</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ r.client_name }}</td>
+<td>{{ r.awb_no }}</td>
+<td>{{ r.destination }}</td>
+<td>{{ r.sum_count }}</td>
+<td>{{ r.amount }}</td>
+</tr>
+{% else %}
+<tr><td colspan="6" class="text-center">No Records</td></tr>
+{% endfor %}
+</tbody>
+</table>
+<h6 class="text-end mt-2">
+    <strong>Total Amount: {{ total_amount }}</strong>
+</h6>
+</div>
+
+{% endblock %}

@@ -1,0 +1,171 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h4>Day Book</h4>
+
+<!-- FILTER FORM (with explicit Filter button) -->
+<div class="card p-3 mb-3">
+    <div class="row g-2">
+        <div class="col-md-2">
+            <label>Date</label>
+            <input type="date" id="filter-date" class="form-control" value="{{ entry_date }}">
+        </div>
+        <div class="col-md-2">
+            <label>Weight</label>
+            <input type="number" step="0.01" id="filter-weight" class="form-control" value="{{ weight }}" placeholder="Any">
+        </div>
+        <div class="col-md-3">
+            <label>AWB No</label>
+            <input id="filter-awb" class="form-control" value="{{ awb_no }}" placeholder="Any">
+        </div>
+        <div class="col-md-3">
+            <label>Destination</label>
+            <input id="filter-dest" class="form-control" value="{{ destination }}" placeholder="Any">
+        </div>
+        <div class="col-md-2 d-flex align-items-end gap-2">
+            <button class="btn btn-primary w-100" id="filter-btn">
+                <i class="fa fa-filter"></i> Filter
+            </button>
+            <button class="btn btn-secondary" id="reset-btn">
+                <i class="fa fa-undo"></i> Reset
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- EXPORT (hidden fields updated by JS) -->
+<form method="post" action="/day-book-export" id="export-form">
+    <input type="hidden" name="entry_date"  id="export-date" value="{{ entry_date }}">
+    <input type="hidden" name="weight"      id="export-weight" value="{{ weight }}">
+    <input type="hidden" name="awb_no"      id="export-awb" value="{{ awb_no }}">
+    <input type="hidden" name="destination" id="export-dest" value="{{ destination }}">
+    <button class="btn btn-success mb-2">
+        <i class="fa fa-file-excel"></i> Export to Excel
+    </button>
+</form>
+
+<!-- TABLE (dynamic) -->
+<div class="card p-3">
+    <div id="table-loading" class="text-center py-3" style="display:none;">
+        <i class="fa fa-spinner fa-spin"></i> Loading...
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm" id="daybook-table">
+            <thead class="table-dark">
+                <tr>
+                    <th>SNO</th><th>Weight</th><th>AWB No</th><th>Destination</th><th>Total</th>
+                </tr>
+            </thead>
+            <tbody id="daybook-tbody">
+                <tr><td colspan="5" class="text-center">Click "Filter" to load data...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <h6 class="text-end mt-2" id="total-sum-display">
+        <strong>Sum of Total Amount: 0.00</strong>
+    </h6>
+</div>
+
+<script>
+const dateInput = document.getElementById('filter-date');
+const weightInput = document.getElementById('filter-weight');
+const awbInput = document.getElementById('filter-awb');
+const destInput = document.getElementById('filter-dest');
+const filterBtn = document.getElementById('filter-btn');
+const resetBtn = document.getElementById('reset-btn');
+
+const exportDate = document.getElementById('export-date');
+const exportWeight = document.getElementById('export-weight');
+const exportAwb = document.getElementById('export-awb');
+const exportDest = document.getElementById('export-dest');
+
+const tbody = document.getElementById('daybook-tbody');
+const loadingDiv = document.getElementById('table-loading');
+const totalSpan = document.getElementById('total-sum-display');
+
+async function fetchAndUpdate() {
+    const params = new URLSearchParams();
+    if (dateInput.value) params.append('entry_date', dateInput.value);
+    if (weightInput.value) params.append('weight', weightInput.value);
+    if (awbInput.value) params.append('awb_no', awbInput.value);
+    if (destInput.value) params.append('destination', destInput.value);
+
+    loadingDiv.style.display = 'block';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
+
+    try {
+        const response = await fetch(`/day-book/filter?${params.toString()}`);
+        if (!response.ok) throw new Error('Network error');
+        const data = await response.json();
+
+        if (data.rows && data.rows.length) {
+            let html = '';
+            data.rows.forEach((row, idx) => {
+                html += `<tr>
+                    <td>${idx + 1}</td>
+                    <td>${escapeHtml(row.weight)}</td>
+                    <td>${escapeHtml(row.awb_no)}</td>
+                    <td>${escapeHtml(row.destination)}</td>
+                    <td>${parseFloat(row.total_amount).toFixed(2)}</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">No Records</td></tr>';
+        }
+
+        totalSpan.innerHTML = `<strong>Sum of Total Amount: ${parseFloat(data.total_sum || 0).toFixed(2)}</strong>`;
+
+        // Update export hidden fields
+        exportDate.value = dateInput.value;
+        exportWeight.value = weightInput.value;
+        exportAwb.value = awbInput.value;
+        exportDest.value = destInput.value;
+
+    } catch (err) {
+        console.error(err);
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load data</td></tr>';
+        totalSpan.innerHTML = '<strong>Sum of Total Amount: 0.00</strong>';
+    } finally {
+        loadingDiv.style.display = 'none';
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+function resetFilters() {
+    dateInput.value = '';
+    weightInput.value = '';
+    awbInput.value = '';
+    destInput.value = '';
+    fetchAndUpdate();  // immediately load all records
+}
+
+filterBtn.addEventListener('click', fetchAndUpdate);
+resetBtn.addEventListener('click', resetFilters);
+
+// Load all records on page load
+fetchAndUpdate();
+</script>
+
+<style>
+#table-loading {
+    background: rgba(255,255,255,0.8);
+    position: absolute;
+    width: calc(100% - 2rem);
+    z-index: 10;
+}
+.card.p-3 {
+    position: relative;
+}
+</style>
+
+{% endblock %}

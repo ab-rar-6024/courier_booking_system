@@ -1,0 +1,126 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h4 class="mb-3">Zone Entry</h4>
+
+<div class="d-flex justify-content-end mb-2">
+    <a href="/zone-export" class="btn btn-success">
+        <i class="fa fa-file-excel"></i> Export to Excel
+    </a>
+</div>
+
+<!-- ENTRY / EDIT FORM -->
+<div class="card p-3 mb-4">
+    <form method="post" id="zone-form">
+        <input type="hidden" name="_action" id="zone-action" value="add">
+        <input type="hidden" name="edit_id" id="zone-edit-id" value="">
+        <div class="row">
+            <div class="col-md-5">
+                <label class="form-label">District</label>
+                <div class="ac-wrap">
+                    <input type="text" name="district" id="f-district"
+                           class="form-control" placeholder="Enter District" required>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">Rate Zone</label>
+                <input type="text" name="rate_zone" id="f-rate-zone"
+                       class="form-control" placeholder="Enter Rate Zone" required>
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-1">
+                <button type="submit" class="btn btn-success flex-fill btn-submit">
+                    <i class="fa fa-save"></i> <span id="save-lbl">Save</span>
+                </button>
+                <button type="button" class="btn btn-secondary" id="cancel-btn"
+                        style="display:none" onclick="zoneCancel()">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- TABLE -->
+<div class="card p-3">
+    <h6 class="mb-3">Zone List</h6>
+    <table class="table table-bordered table-striped">
+        <thead class="table-dark">
+            <tr>
+                <th width="8%">#</th>
+                <th width="40%">District</th>
+                <th width="35%">Rate Zone</th>
+                <th width="17%">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for z in zones %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ z.district }}</td>
+                <td>{{ z.rate_zone }}</td>
+                <td>
+                    <button class="btn btn-warning btn-act btn-sm"
+                        onclick="zoneEdit({{ z.id }},'{{ z.district }}','{{ z.rate_zone }}')">
+                        <i class="fa fa-pen"></i> Edit
+                    </button>
+                    <button class="btn btn-info btn-act btn-sm text-white"
+                        onclick="zoneCopy('{{ z.district }}','{{ z.rate_zone }}')">
+                        <i class="fa fa-copy"></i>
+                    </button>
+                    <!-- DELETE form -->
+                    <form method="post" id="zdel-{{ z.id }}" style="display:inline">
+                        <input type="hidden" name="_action" value="delete">
+                        <input type="hidden" name="del_id"  value="{{ z.id }}">
+                        <button type="button" class="btn btn-danger btn-act btn-sm"
+                            onclick="confirmDel('zdel-{{ z.id }}')">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="text-center text-muted">No Records Found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// Autocomplete: district from zones table
+bindAC(
+    document.getElementById("f-district"),
+    "/api/ac/district?q=",
+    v => { document.getElementById("f-district").value = v; },
+    v => v, null
+);
+
+function zoneEdit(id, district, zone) {
+    document.getElementById("zone-action").value  = "edit";
+    document.getElementById("zone-edit-id").value = id;
+    document.getElementById("f-district").value   = district;
+    document.getElementById("f-rate-zone").value  = zone;
+    document.getElementById("save-lbl").textContent = "Update";
+    document.getElementById("cancel-btn").style.display = "inline-block";
+    document.getElementById("f-district").focus();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function zoneCopy(district, zone) {
+    zoneEdit("", district, zone);
+    document.getElementById("zone-action").value  = "add";
+    document.getElementById("zone-edit-id").value = "";
+    document.getElementById("save-lbl").textContent = "Save";
+}
+function zoneCancel() {
+    document.getElementById("zone-action").value  = "add";
+    document.getElementById("zone-edit-id").value = "";
+    document.getElementById("f-district").value   = "";
+    document.getElementById("f-rate-zone").value  = "";
+    document.getElementById("save-lbl").textContent = "Save";
+    document.getElementById("cancel-btn").style.display = "none";
+}
+</script>
+{% endblock %}

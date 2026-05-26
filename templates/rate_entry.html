@@ -1,0 +1,413 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h4 class="mb-3">Rate Entry</h4>
+
+<div class="d-flex justify-content-between mb-2">
+    <!-- Search form (preserves limit & page via url_for) -->
+    <form method="get" class="d-flex gap-2">
+        <input type="text" name="search" value="{{ search }}"
+               class="form-control form-control-sm" placeholder="Search code / place…" style="width:220px">
+        <button class="btn btn-sm btn-primary">Search</button>
+        {% if search %}
+        <a href="{{ url_for('rate_entry', limit=limit, page=1) }}" class="btn btn-sm btn-secondary">Clear</a>
+        {% endif %}
+    </form>
+
+    <div class="d-flex gap-2 align-items-center">
+        <!-- LIMIT DROPDOWN -->
+        <div class="d-flex align-items-center gap-1">
+            <label class="small">Show:</label>
+            <select name="limit" id="limit-select" class="form-select form-select-sm" style="width: auto;">
+                <option value="10" {% if limit == '10' %}selected{% endif %}>10</option>
+                <option value="20" {% if limit == '20' %}selected{% endif %}>20</option>
+                <option value="100" {% if limit == '100' %}selected{% endif %}>100</option>
+                <option value="500" {% if limit == '500' %}selected{% endif %}>500</option>
+                <option value="all" {% if limit == 'all' %}selected{% endif %}>All</option>
+            </select>
+        </div>
+        <!-- Export button unchanged -->
+        <a href="/rate-export" class="btn btn-success btn-sm">
+            <i class="fa fa-file-excel"></i> Export to Excel
+        </a>
+    </div>
+</div>
+
+<!-- PAGINATION INFO & CONTROLS (only if not "all") -->
+{% if limit != 'all' and total_pages > 1 %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <small>
+        Showing {{ ((page-1) * limit|int) + 1 }} –
+        {{ [page * limit|int, total]|min }} of {{ total }} entries
+    </small>
+    <nav>
+        <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=page-1) if page > 1 else '#' }}">&laquo;</a>
+            </li>
+            {% for p in range(1, total_pages+1) %}
+                {% if p == page %}
+                <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                {% elif p <= 3 or p > total_pages-3 or (p >= page-2 and p <= page+2) %}
+                <li class="page-item"><a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=p) }}">{{ p }}</a></li>
+                {% elif p == 4 and page > 4 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+            {% endfor %}
+            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=page+1) if page < total_pages else '#' }}">&raquo;</a>
+            </li>
+        </ul>
+    </nav>
+</div>
+{% elif limit == 'all' %}
+<small>Showing all {{ total }} entries</small>
+{% endif %}
+
+<!-- ENTRY / EDIT FORM (unchanged) -->
+<div class="card p-3 mb-4">
+<form method="post" id="rate-form">
+<input type="hidden" name="_action" id="rate-action" value="add">
+<input type="hidden" name="edit_id" id="rate-edit-id" value="">
+<div class="row g-2 align-items-end">
+
+    <div class="col-md-2">
+        <label>CODE</label>
+        <div class="ac-wrap">
+            <input name="code" id="r-code" class="form-control" placeholder="e.g. MAS" required>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <label>CODE FULLFORM</label>
+        <input name="code_fullform" id="r-fullform" class="form-control"
+               placeholder="Full company name" required>
+    </div>
+
+    <div class="col-md-2">
+        <label>PLACE</label>
+        <div class="ac-wrap">
+            <input name="place" id="r-place" class="form-control"
+                   placeholder="e.g. CHENNAI" required
+                   oninput="onPlaceInput(this.value)"
+                   onblur="onPlaceBlur(this.value)"
+                   onkeydown="onPlaceKeydown(event)">
+        </div>
+    </div>
+
+    <div class="col-md-1">
+        <label>Zone</label>
+        <input name="zone" id="r-zone" class="form-control fw-bold text-center"
+               readonly placeholder="Auto"
+               style="background:#f0f4ff; border:2px solid #6c8ebf;
+                      color:#1a3a6b; font-size:1.1rem; cursor:not-allowed;">
+    </div>
+
+    <div class="col-md-1">
+        <label>250 G Dx</label>
+        <input name="rate_250g" id="r-250g" type="number" step="0.01" class="form-control" value="">
+    </div>
+    <div class="col-md-1">
+        <label>0.500 g</label>
+        <input name="rate_500g" id="r-500g" type="number" step="0.01" class="form-control" value="">
+    </div>
+    <div class="col-md-1">
+        <label>0.500 g 1</label>
+        <input name="rate_500g_1" id="r-500g1" type="number" step="0.01" class="form-control" value="">
+    </div>
+    <div class="col-md-1">
+        <label>1–3 KG</label>
+        <input name="rate_1_to_3kg" id="r-1to3" type="number" step="0.01" class="form-control" value="">
+    </div>
+    <div class="col-md-1">
+        <label>3–10 KG</label>
+        <input name="rate_3_to_10kg" id="r-3to10" type="number" step="0.01" class="form-control" value="">
+    </div>
+    <div class="col-md-1">
+        <label>Above 10</label>
+        <input name="rate_above_10kg" id="r-10kg" type="number" step="0.01" class="form-control" value="">
+    </div>
+    <div class="col-md-1">
+        <label>Fuel</label>
+        <input name="fuel" id="r-fuel" type="number" step="0.01" class="form-control" value="">
+    </div>
+
+    <div class="col-md-2 d-flex align-items-end gap-1">
+        <button type="submit" class="btn btn-success flex-fill btn-submit">
+            <i class="fa fa-save"></i> <span id="r-save-lbl">Save</span>
+        </button>
+        <button type="button" class="btn btn-secondary" id="r-cancel-btn"
+                style="display:none" onclick="rateCancel()">✕</button>
+    </div>
+
+</div>
+</form>
+</div>
+
+<!-- ZONE PICKER OVERLAY (unchanged) -->
+<div id="zone-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:99999; background:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:12px; width:360px; box-shadow:0 10px 40px rgba(0,0,0,0.4); overflow:hidden;">
+    <div style="background:#ffc107; padding:14px 20px;">
+      <strong style="font-size:1rem;">⚠&nbsp; Unknown Place — Select Zone</strong>
+    </div>
+    <div style="padding:20px;">
+      <p style="margin-bottom:6px;">Place:&nbsp;<strong id="zone-place-label" style="color:#0d6efd; text-transform:uppercase; font-size:1.05rem;"></strong></p>
+      <p style="font-size:.85rem; color:#6c757d; margin-bottom:12px;">This place is not in the known list.<br>Select its zone — it will be remembered next time.</p>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:.85rem; font-weight:600; color:#495057; display:block; margin-bottom:4px;">
+          Place Code <span style="font-weight:400; color:#6c757d;">(optional, e.g. MAA, BLR)</span>
+        </label>
+        <input type="text" id="zone-place-code" placeholder="Enter short place code…" style="width:100%; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:.95rem; text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button onclick="confirmZone(1)" style="padding:10px; background:#0d6efd; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 1 — Chennai</button>
+        <button onclick="confirmZone(2)" style="padding:10px; background:#198754; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 2 — Tamil Nadu</button>
+        <button onclick="confirmZone(3)" style="padding:10px; background:#ffc107; color:#000; border:none; border-radius:6px; cursor:pointer;">Zone 3 — Kerala / Karnataka / Telangana / AP</button>
+        <button onclick="confirmZone(4)" style="padding:10px; background:#dc3545; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 4 — Delhi / Mumbai / Hyderabad / Kolkata</button>
+        <button onclick="confirmZone(5)" style="padding:10px; background:#6c757d; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 5 — Rest of India</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TABLE -->
+<div class="card p-3">
+<table class="table table-bordered table-striped table-sm">
+<thead class="table-dark">
+<tr>
+    <th>#</th><th>Code</th><th>Code FullForm</th><th>Place</th>
+    <th>250g</th><th>0.5g</th><th>0.5g1</th><th>1–3kg</th>
+    <th>3–10kg</th><th>&gt;10kg</th><th>Fuel</th><th>Action</th>
+</tr>
+</thead>
+<tbody>
+{% for r in rates %}
+<tr id="rrow-{{ r.id }}">
+    <td>{{ loop.index + ((page-1) * (limit|int if limit != 'all' else 0)) }}</td>
+    <td><strong>{{ r.code }}</strong></td>
+    <td>{{ r.code_fullform }}</td>
+    <td>{{ r.place }}</td>
+    <td>{{ r.rate_250g }}</td>
+    <td>{{ r.rate_500g }}</td>
+    <td>{{ r.rate_500g_1 }}</td>
+    <td>{{ r.rate_1_to_3kg }}</td>
+    <td>{{ r.rate_3_to_10kg }}</td>
+    <td>{{ r.rate_above_10kg }}</td>
+    <td>{{ r.fuel }}</td>
+    <td>
+        <button class="btn btn-warning btn-act btn-sm" onclick='rateEdit({{ r|tojson }})'><i class="fa fa-pen"></i></button>
+        <button class="btn btn-info btn-act btn-sm text-white" onclick='rateCopy({{ r|tojson }})'><i class="fa fa-copy"></i></button>
+        <form method="post" id="rdel-{{ r.id }}" style="display:inline">
+            <input type="hidden" name="_action" value="delete">
+            <input type="hidden" name="del_id"  value="{{ r.id }}">
+            <button type="button" class="btn btn-danger btn-act btn-sm" onclick="confirmDel('rdel-{{ r.id }}')"><i class="fa fa-trash"></i></button>
+        </form>
+    </td>
+</tr>
+{% else %}
+<tr><td colspan="12" class="text-center">No Records</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Known place keywords ───────────────────────────────────
+const ZONE_KEYWORDS = {
+    1: ["CHENNAI"],
+    2: ["TAMIL NADU", "TAMILNADU"],
+    3: ["KERALA", "KARNATAKA", "TELANGANA", "ANDHRA PRADESH", "ANDHRA"],
+    4: ["NEW DELHI", "DELHI", "MUMBAI", "PUNE", "HYDERABAD",
+        "KOLKATTA", "KOLKATA", "CALCUTTA", "BANGALORE", "BENGALURU"]
+};
+
+const zoneCache  = {};
+let   modalOpenFor  = null;
+let   resolveTimer  = null;
+
+// ── Helpers ────────────────────────────────────────────────
+function detectFromKeywords(v) {
+    for (const [zone, kws] of Object.entries(ZONE_KEYWORDS))
+        if (kws.some(k => v === k || v.includes(k) || k.includes(v)))
+            return parseInt(zone);
+    return null;
+}
+
+function applyZone(zone) {
+    const el = document.getElementById("r-zone");
+    el.value = zone;
+    const c  = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
+    el.style.background = c[zone] || "#f0f4ff";
+}
+
+function clearZone() {
+    const el = document.getElementById("r-zone");
+    el.value = "";
+    el.style.background = "#f0f4ff";
+}
+
+// ── Overlay show / hide ────────────────────────────────────
+function showZoneOverlay(place) {
+    if (modalOpenFor === place) return;
+    modalOpenFor = place;
+    document.getElementById("zone-place-label").textContent = place;
+    const ov = document.getElementById("zone-overlay");
+    ov.style.display = "flex";        // make visible
+}
+
+function hideZoneOverlay() {
+    document.getElementById("zone-overlay").style.display = "none";
+    modalOpenFor = null;
+}
+
+// ── User picks a zone ──────────────────────────────────────
+async function confirmZone(zone) {
+    const place     = document.getElementById("r-place").value.trim().toUpperCase();
+    const placeCode = document.getElementById("zone-place-code").value.trim().toUpperCase();
+    hideZoneOverlay();
+    document.getElementById("zone-place-code").value = ""; // reset for next use
+    zoneCache[place] = zone;
+    applyZone(zone);
+    try {
+        const r = await fetch("/api/place/save-zone", {
+            method : "POST",
+            headers: {"Content-Type":"application/json"},
+            body   : JSON.stringify({ place, zone, place_code: placeCode })
+        });
+        const d = await r.json();
+        console.log("Saved:", d);
+    } catch(e) { console.error("Save error:", e); }
+}
+
+// ── Place input handlers ───────────────────────────────────
+function onPlaceInput(val) {
+    const v = val.trim().toUpperCase();
+    if (!v)          { clearZone(); modalOpenFor = null; return; }
+    const kz = detectFromKeywords(v);
+    if (kz)          { applyZone(kz); return; }
+    if (zoneCache[v]){ applyZone(zoneCache[v]); return; }
+    clearZone();
+}
+
+function scheduleResolve(val) {
+    clearTimeout(resolveTimer);
+    resolveTimer = setTimeout(() => doResolve(val), 200);
+}
+
+async function doResolve(val) {
+    const v = val.trim().toUpperCase();
+    if (!v) return;
+
+    // 1. Static keywords
+    const kz = detectFromKeywords(v);
+    if (kz) { applyZone(kz); return; }
+
+    // 2. Memory cache
+    if (zoneCache[v]) { applyZone(zoneCache[v]); return; }
+
+    // 3. DB lookup
+    try {
+        const res  = await fetch("/api/place/get-zone?place=" + encodeURIComponent(v));
+        const data = await res.json();
+        console.log("DB result for", v, "→", JSON.stringify(data));
+        if (data && data.zone) {
+            zoneCache[v] = data.zone;
+            applyZone(data.zone);
+            return;
+        }
+    } catch(e) { console.error("Lookup error:", e); }
+
+    // 4. Unknown → show overlay
+    console.log("Showing zone picker for:", v);
+    showZoneOverlay(v);
+}
+
+function onPlaceBlur(val)  { scheduleResolve(val); }
+function onPlaceKeydown(e) {
+    if (e.key === "Enter" || e.key === "Tab") scheduleResolve(e.target.value);
+}
+
+// ── Autocomplete bindings ──────────────────────────────────
+bindAC(
+    document.getElementById("r-code"),
+    "/api/ac/code?q=",
+    item => {
+        document.getElementById("r-code").value     = item.code;
+        document.getElementById("r-fullform").value = item.code_fullform;
+    },
+    item => item.code,
+    item => item.code_fullform
+);
+
+bindAC(
+    document.getElementById("r-place"),
+    "/api/ac/place?q=",
+    async v => {
+        document.getElementById("r-place").value = v;
+        await doResolve(v);
+    },
+    v => v, null
+);
+
+// ── Table row actions ──────────────────────────────────────
+function rateEdit(r) {
+    document.getElementById("rate-action").value   = "edit";
+    document.getElementById("rate-edit-id").value  = r.id;
+    document.getElementById("r-code").value        = r.code;
+    document.getElementById("r-fullform").value    = r.code_fullform;
+    document.getElementById("r-place").value       = r.place;
+    document.getElementById("r-250g").value        = r.rate_250g;
+    document.getElementById("r-500g").value        = r.rate_500g;
+    document.getElementById("r-500g1").value       = r.rate_500g_1;
+    document.getElementById("r-1to3").value        = r.rate_1_to_3kg;
+    document.getElementById("r-3to10").value       = r.rate_3_to_10kg;
+    document.getElementById("r-10kg").value        = r.rate_above_10kg;
+    document.getElementById("r-fuel").value        = r.fuel;
+    const el = document.getElementById("r-zone");
+    el.value  = r.zone || "";
+    const c   = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
+    el.style.background = c[r.zone] || "#f0f4ff";
+    document.getElementById("r-save-lbl").textContent     = "Update";
+    document.getElementById("r-cancel-btn").style.display = "inline-block";
+    document.querySelectorAll(".editing-row").forEach(e => e.classList.remove("editing-row"));
+    document.getElementById("rrow-" + r.id)?.classList.add("editing-row");
+    window.scrollTo({top:0, behavior:"smooth"});
+    document.getElementById("r-code").focus();
+}
+
+function rateCopy(r) {
+    rateEdit(r);
+    document.getElementById("rate-action").value       = "add";
+    document.getElementById("rate-edit-id").value      = "";
+    document.getElementById("r-place").value           = "";
+    document.getElementById("r-zone").value            = "";
+    document.getElementById("r-zone").style.background = "#f0f4ff";
+    document.getElementById("r-save-lbl").textContent  = "Save";
+    document.getElementById("r-place").focus();
+}
+
+function rateCancel() {
+    document.getElementById("rate-action").value      = "add";
+    document.getElementById("rate-edit-id").value     = "";
+    ["r-code","r-fullform","r-place"].forEach(id => document.getElementById(id).value = "");
+    ["r-250g","r-500g","r-500g1","r-1to3","r-3to10","r-10kg","r-fuel"]
+        .forEach(id => document.getElementById(id).value = "0");
+    clearZone();
+    document.getElementById("r-save-lbl").textContent     = "Save";
+    document.getElementById("r-cancel-btn").style.display = "none";
+    document.querySelectorAll(".editing-row").forEach(e => e.classList.remove("editing-row"));
+    modalOpenFor = null;
+}
+
+// ── NEW: Auto‑submit when limit dropdown changes ───────────
+document.getElementById('limit-select').addEventListener('change', function() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('limit', this.value);
+    url.searchParams.set('page', '1');   // reset to first page
+    window.location.href = url.toString();
+});
+</script>
+{% endblock %}

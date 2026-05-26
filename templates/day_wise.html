@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h4>Day Wise (Manual Entry)</h4>
+
+<!-- ENTRY / EDIT FORM -->
+<div class="card p-3 mb-3">
+<form method="post" id="dw-form">
+<input type="hidden" name="_action"  id="dw-action"  value="add">
+<input type="hidden" name="edit_id"  id="dw-edit-id" value="">
+<div class="row g-2">
+
+<div class="col-md-3">
+    <label>Date</label>
+    <input type="date" name="entry_date" id="dw-date" class="form-control" required>
+</div>
+<div class="col-md-3">
+    <label>Total Weight</label>
+    <input type="number" step="0.001" name="total_weight" id="dw-weight" class="form-control">
+</div>
+<div class="col-md-3">
+    <label>Total Sales Amount</label>
+    <input type="number" step="0.01" name="total_sales" id="dw-sales" class="form-control">
+</div>
+<div class="col-md-2 d-flex align-items-end gap-1">
+    <button type="submit" class="btn btn-success flex-fill btn-submit">
+        <i class="fa fa-save"></i> <span id="dw-save-lbl">Save</span>
+    </button>
+    <button type="button" class="btn btn-secondary" id="dw-cancel-btn"
+            style="display:none" onclick="dwCancel()">✕</button>
+</div>
+</div>
+</form>
+</div>
+
+<!-- FILTER -->
+<form method="get" class="card p-3 mb-3">
+<div class="row g-2">
+<div class="col-md-3">
+    <label>From Date</label>
+    <input type="date" name="from" class="form-control" value="{{ from_date }}">
+</div>
+<div class="col-md-3">
+    <label>To Date</label>
+    <input type="date" name="to" class="form-control" value="{{ to_date }}">
+</div>
+<div class="col-md-2 d-flex align-items-end">
+    <button class="btn btn-primary w-100">
+        <i class="fa fa-filter"></i> Filter
+    </button>
+</div>
+</div>
+</form>
+
+<!-- EXPORT -->
+<form method="post" action="/day-wise-export">
+<input type="hidden" name="from_date" value="{{ from_date }}">
+<input type="hidden" name="to_date"   value="{{ to_date }}">
+<button class="btn btn-success mb-2">
+    <i class="fa fa-file-excel"></i> Export to Excel
+</button>
+</form>
+
+<!-- TABLE -->
+<div class="card p-3">
+<table class="table table-bordered table-sm">
+<thead class="table-dark">
+<tr>
+<th>SNO</th><th>Date</th><th>Total Weight</th><th>Total Sales Amount</th><th>Action</th>
+</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr id="dwrow-{{ r.id }}">
+<td>{{ loop.index }}</td>
+<td>{{ r.entry_date }}</td>
+<td>{{ r.total_weight }}</td>
+<td>{{ r.total_sales }}</td>
+<td>
+    <button class="btn btn-warning btn-act btn-sm"
+        onclick="dwEdit({{ r.id }},'{{ r.entry_date }}',{{ r.total_weight }},{{ r.total_sales }})">
+        <i class="fa fa-pen"></i>
+    </button>
+    <form method="post" id="dwdel-{{ r.id }}" style="display:inline">
+        <input type="hidden" name="_action" value="delete">
+        <input type="hidden" name="del_id"  value="{{ r.id }}">
+        <button type="button" class="btn btn-danger btn-act btn-sm"
+            onclick="confirmDel('dwdel-{{ r.id }}')">
+            <i class="fa fa-trash"></i>
+        </button>
+    </form>
+</td>
+</tr>
+{% else %}
+<tr><td colspan="5" class="text-center">No Records</td></tr>
+{% endfor %}
+</tbody>
+</table>
+<h6 class="text-end mt-2">
+<strong>
+Grand Total Weight: {{ grand_weight }} |
+Grand Total Sales: {{ grand_sales }}
+</strong>
+</h6>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const d = document.getElementById("dw-date");
+    if (!d.value) d.value = new Date().toISOString().split("T")[0];
+});
+function dwEdit(id, date, weight, sales) {
+    document.getElementById("dw-action").value  = "edit";
+    document.getElementById("dw-edit-id").value = id;
+    document.getElementById("dw-date").value    = date;
+    document.getElementById("dw-weight").value  = weight;
+    document.getElementById("dw-sales").value   = sales;
+    document.getElementById("dw-save-lbl").textContent = "Update";
+    document.getElementById("dw-cancel-btn").style.display = "inline-block";
+    document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
+    document.getElementById("dwrow-" + id)?.classList.add("editing-row");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("dw-date").focus();
+}
+function dwCancel() {
+    document.getElementById("dw-action").value  = "add";
+    document.getElementById("dw-edit-id").value = "";
+    document.getElementById("dw-date").value    = new Date().toISOString().split("T")[0];
+    document.getElementById("dw-weight").value  = "";
+    document.getElementById("dw-sales").value   = "";
+    document.getElementById("dw-save-lbl").textContent = "Save";
+    document.getElementById("dw-cancel-btn").style.display = "none";
+    document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
+}
+</script>
+{% endblock %}
