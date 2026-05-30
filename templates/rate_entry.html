@@ -4,7 +4,7 @@
 <h4 class="mb-3">Rate Entry</h4>
 
 <div class="d-flex justify-content-between mb-2">
-    <!-- Search form (preserves limit & page via url_for) -->
+    <!-- Search form -->
     <form method="get" class="d-flex gap-2">
         <input type="text" name="search" value="{{ search }}"
                class="form-control form-control-sm" placeholder="Search code / place…" style="width:220px">
@@ -15,7 +15,6 @@
     </form>
 
     <div class="d-flex gap-2 align-items-center">
-        <!-- LIMIT DROPDOWN -->
         <div class="d-flex align-items-center gap-1">
             <label class="small">Show:</label>
             <select name="limit" id="limit-select" class="form-select form-select-sm" style="width: auto;">
@@ -26,14 +25,13 @@
                 <option value="all" {% if limit == 'all' %}selected{% endif %}>All</option>
             </select>
         </div>
-        <!-- Export button unchanged -->
         <a href="/rate-export" class="btn btn-success btn-sm">
             <i class="fa fa-file-excel"></i> Export to Excel
         </a>
     </div>
 </div>
 
-<!-- PAGINATION INFO & CONTROLS (only if not "all") -->
+<!-- PAGINATION INFO & CONTROLS -->
 {% if limit != 'all' and total_pages > 1 %}
 <div class="d-flex justify-content-between align-items-center mb-2">
     <small>
@@ -64,7 +62,7 @@
 <small>Showing all {{ total }} entries</small>
 {% endif %}
 
-<!-- ENTRY / EDIT FORM (unchanged) -->
+<!-- ENTRY / EDIT FORM -->
 <div class="card p-3 mb-4">
 <form method="post" id="rate-form">
 <input type="hidden" name="_action" id="rate-action" value="add">
@@ -74,7 +72,8 @@
     <div class="col-md-2">
         <label>CODE</label>
         <div class="ac-wrap">
-            <input name="code" id="r-code" class="form-control" placeholder="e.g. MAS" required>
+            <input name="code" id="r-code" class="form-control" placeholder="e.g. MAS" required
+                   oninput="onCodePlaceChange()">
         </div>
     </div>
 
@@ -103,33 +102,30 @@
                       color:#1a3a6b; font-size:1.1rem; cursor:not-allowed;">
     </div>
 
+    <!-- RATE SLABS -->
     <div class="col-md-1">
-        <label>250 G Dx</label>
+        <label class="small fw-semibold">250 GMS</label>
         <input name="rate_250g" id="r-250g" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label>0.500 g</label>
+        <label class="small fw-semibold">500 GMS</label>
         <input name="rate_500g" id="r-500g" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label>0.500 g 1</label>
+        <label class="small fw-semibold">1 KG</label>
         <input name="rate_500g_1" id="r-500g1" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label>1–3 KG</label>
+        <label class="small fw-semibold">ABV 1KG/KG</label>
         <input name="rate_1_to_3kg" id="r-1to3" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label>3–10 KG</label>
+        <label class="small fw-semibold">ABV 3KG/KG</label>
         <input name="rate_3_to_10kg" id="r-3to10" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label>Above 10</label>
+        <label class="small fw-semibold">ABV 10KG/KG</label>
         <input name="rate_above_10kg" id="r-10kg" type="number" step="0.01" class="form-control" value="">
-    </div>
-    <div class="col-md-1">
-        <label>Fuel</label>
-        <input name="fuel" id="r-fuel" type="number" step="0.01" class="form-control" value="">
     </div>
 
     <div class="col-md-2 d-flex align-items-end gap-1">
@@ -144,40 +140,15 @@
 </form>
 </div>
 
-<!-- ZONE PICKER OVERLAY (unchanged) -->
-<div id="zone-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:99999; background:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
-  <div style="background:#fff; border-radius:12px; width:360px; box-shadow:0 10px 40px rgba(0,0,0,0.4); overflow:hidden;">
-    <div style="background:#ffc107; padding:14px 20px;">
-      <strong style="font-size:1rem;">⚠&nbsp; Unknown Place — Select Zone</strong>
-    </div>
-    <div style="padding:20px;">
-      <p style="margin-bottom:6px;">Place:&nbsp;<strong id="zone-place-label" style="color:#0d6efd; text-transform:uppercase; font-size:1.05rem;"></strong></p>
-      <p style="font-size:.85rem; color:#6c757d; margin-bottom:12px;">This place is not in the known list.<br>Select its zone — it will be remembered next time.</p>
-      <div style="margin-bottom:14px;">
-        <label style="font-size:.85rem; font-weight:600; color:#495057; display:block; margin-bottom:4px;">
-          Place Code <span style="font-weight:400; color:#6c757d;">(optional, e.g. MAA, BLR)</span>
-        </label>
-        <input type="text" id="zone-place-code" placeholder="Enter short place code…" style="width:100%; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:.95rem; text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
-      </div>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <button onclick="confirmZone(1)" style="padding:10px; background:#0d6efd; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 1 — Chennai</button>
-        <button onclick="confirmZone(2)" style="padding:10px; background:#198754; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 2 — Tamil Nadu</button>
-        <button onclick="confirmZone(3)" style="padding:10px; background:#ffc107; color:#000; border:none; border-radius:6px; cursor:pointer;">Zone 3 — Kerala / Karnataka / Telangana / AP</button>
-        <button onclick="confirmZone(4)" style="padding:10px; background:#dc3545; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 4 — Delhi / Mumbai / Hyderabad / Kolkata</button>
-        <button onclick="confirmZone(5)" style="padding:10px; background:#6c757d; color:#fff; border:none; border-radius:6px; cursor:pointer;">Zone 5 — Rest of India</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- TABLE -->
 <div class="card p-3">
 <table class="table table-bordered table-striped table-sm">
 <thead class="table-dark">
 <tr>
-    <th>#</th><th>Code</th><th>Code FullForm</th><th>Place</th>
-    <th>250g</th><th>0.5g</th><th>0.5g1</th><th>1–3kg</th>
-    <th>3–10kg</th><th>&gt;10kg</th><th>Fuel</th><th>Action</th>
+    <th>#</th><th>Code</th><th>Code FullForm</th><th>Place</th><th>Zone</th>
+    <th>250 GMS</th><th>500 GMS</th><th>1 KG</th>
+    <th>ABV 1KG/KG</th><th>ABV 3KG/KG</th><th>ABV 10KG/KG</th>
+    <th>Action</th>
 </tr>
 </thead>
 <tbody>
@@ -187,13 +158,17 @@
     <td><strong>{{ r.code }}</strong></td>
     <td>{{ r.code_fullform }}</td>
     <td>{{ r.place }}</td>
+    <td>
+        {% set zone_labels = {1:'Z1',2:'Z2',3:'Z3',4:'Z4',5:'Z5'} %}
+        {% set zone_colors = {1:'primary',2:'success',3:'warning',4:'danger',5:'secondary'} %}
+        <span class="badge bg-{{ zone_colors.get(r.zone, 'secondary') }}">{{ zone_labels.get(r.zone, r.zone) }}</span>
+    </td>
     <td>{{ r.rate_250g }}</td>
     <td>{{ r.rate_500g }}</td>
     <td>{{ r.rate_500g_1 }}</td>
     <td>{{ r.rate_1_to_3kg }}</td>
     <td>{{ r.rate_3_to_10kg }}</td>
     <td>{{ r.rate_above_10kg }}</td>
-    <td>{{ r.fuel }}</td>
     <td>
         <button class="btn btn-warning btn-act btn-sm" onclick='rateEdit({{ r|tojson }})'><i class="fa fa-pen"></i></button>
         <button class="btn btn-info btn-act btn-sm text-white" onclick='rateCopy({{ r|tojson }})'><i class="fa fa-copy"></i></button>
@@ -215,144 +190,205 @@
 
 {% block scripts %}
 <script>
-// ── Known place keywords ───────────────────────────────────
-const ZONE_KEYWORDS = {
-    1: ["CHENNAI"],
-    2: ["TAMIL NADU", "TAMILNADU"],
-    3: ["KERALA", "KARNATAKA", "TELANGANA", "ANDHRA PRADESH", "ANDHRA"],
-    4: ["NEW DELHI", "DELHI", "MUMBAI", "PUNE", "HYDERABAD",
-        "KOLKATTA", "KOLKATA", "CALCUTTA", "BANGALORE", "BENGALURU"]
-};
+// ======================= ZONE DETECTION & PLACE AUTO-CORRECTION =======================
+// Returns { zoneNum, correctedPlace } based on the user's input.
+function getZoneAndCorrectedPlace(originalPlace) {
+    if (!originalPlace) return { zoneNum: null, correctedPlace: originalPlace };
+    const p = originalPlace.trim().toUpperCase();
 
-const zoneCache  = {};
-let   modalOpenFor  = null;
-let   resolveTimer  = null;
+    // Zone 1 : CHENNAI (place stays "CHENNAI")
+    if (p === "CHENNAI") return { zoneNum: 1, correctedPlace: "CHENNAI" };
 
-// ── Helpers ────────────────────────────────────────────────
-function detectFromKeywords(v) {
-    for (const [zone, kws] of Object.entries(ZONE_KEYWORDS))
-        if (kws.some(k => v === k || v.includes(k) || k.includes(v)))
-            return parseInt(zone);
-    return null;
+    // Zone 2 : TAMIL NADU (place stays "TAMIL NADU")
+    if (p === "TAMIL NADU" || p === "TAMILNADU") return { zoneNum: 2, correctedPlace: "TAMIL NADU" };
+
+    // Zone 3 : SOUTH – any southern state OR the word "SOUTH" itself
+    const southKeywords = ["KERALA", "KARNATAKA", "ANDHRA PRADESH", "ANDHRA", "TELANGANA", "SOUTH"];
+    if (southKeywords.some(kw => p === kw || p.includes(kw) || kw.includes(p))) {
+        return { zoneNum: 3, correctedPlace: "SOUTH" };
+    }
+
+    // Zone 4 : NORTH – any north metro OR the word "NORTH" itself
+    const northMetro = ["DELHI", "NEW DELHI", "MUMBAI", "KOLKATA", "CALCUTTA", "NORTH"];
+    if (northMetro.some(kw => p === kw || p.includes(kw) || kw.includes(p))) {
+        return { zoneNum: 4, correctedPlace: "NORTH" };
+    }
+
+    // Zone 5 : REST OF INDIA (place stays as typed, but uppercase)
+    return { zoneNum: 5, correctedPlace: originalPlace.trim().toUpperCase() };
 }
 
-function applyZone(zone) {
-    const el = document.getElementById("r-zone");
-    el.value = zone;
-    const c  = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
-    el.style.background = c[zone] || "#f0f4ff";
+// Apply zone to the readonly field
+function applyZone(zoneNum) {
+    const zoneField = document.getElementById("r-zone");
+    if (zoneNum) {
+        zoneField.value = zoneNum;
+        const colors = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
+        zoneField.style.background = colors[zoneNum] || "#f0f4ff";
+    } else {
+        zoneField.value = "";
+        zoneField.style.background = "#f0f4ff";
+    }
 }
 
-function clearZone() {
-    const el = document.getElementById("r-zone");
-    el.value = "";
-    el.style.background = "#f0f4ff";
+// Main function: when place loses focus or is changed, we auto‑correct the place
+// and set the zone accordingly.
+function updatePlaceAndZone() {
+    const placeInput = document.getElementById("r-place");
+    const original = placeInput.value;
+    const { zoneNum, correctedPlace } = getZoneAndCorrectedPlace(original);
+    
+    // Only change the place value if a correction was made (i.e., it's zone 3 or 4, or uppercase conversion)
+    if (correctedPlace && correctedPlace !== original) {
+        placeInput.value = correctedPlace;
+    }
+    applyZone(zoneNum);
 }
 
-// ── Overlay show / hide ────────────────────────────────────
-function showZoneOverlay(place) {
-    if (modalOpenFor === place) return;
-    modalOpenFor = place;
-    document.getElementById("zone-place-label").textContent = place;
-    const ov = document.getElementById("zone-overlay");
-    ov.style.display = "flex";        // make visible
+// Wrapper for onblur event – this is where the auto‑correction happens
+function onPlaceBlur(val) {
+    updatePlaceAndZone();
+    onCodePlaceChange(); // trigger auto‑fetch if needed
 }
 
-function hideZoneOverlay() {
-    document.getElementById("zone-overlay").style.display = "none";
-    modalOpenFor = null;
-}
-
-// ── User picks a zone ──────────────────────────────────────
-async function confirmZone(zone) {
-    const place     = document.getElementById("r-place").value.trim().toUpperCase();
-    const placeCode = document.getElementById("zone-place-code").value.trim().toUpperCase();
-    hideZoneOverlay();
-    document.getElementById("zone-place-code").value = ""; // reset for next use
-    zoneCache[place] = zone;
-    applyZone(zone);
-    try {
-        const r = await fetch("/api/place/save-zone", {
-            method : "POST",
-            headers: {"Content-Type":"application/json"},
-            body   : JSON.stringify({ place, zone, place_code: placeCode })
-        });
-        const d = await r.json();
-        console.log("Saved:", d);
-    } catch(e) { console.error("Save error:", e); }
-}
-
-// ── Place input handlers ───────────────────────────────────
+// For oninput we only update zone in real‑time, but we do NOT auto‑correct
+// because that would be annoying while typing. Correction happens on blur.
 function onPlaceInput(val) {
-    const v = val.trim().toUpperCase();
-    if (!v)          { clearZone(); modalOpenFor = null; return; }
-    const kz = detectFromKeywords(v);
-    if (kz)          { applyZone(kz); return; }
-    if (zoneCache[v]){ applyZone(zoneCache[v]); return; }
-    clearZone();
+    // Show zone preview without changing the typed text
+    const { zoneNum } = getZoneAndCorrectedPlace(val);
+    applyZone(zoneNum);
 }
 
-function scheduleResolve(val) {
-    clearTimeout(resolveTimer);
-    resolveTimer = setTimeout(() => doResolve(val), 200);
-}
-
-async function doResolve(val) {
-    const v = val.trim().toUpperCase();
-    if (!v) return;
-
-    // 1. Static keywords
-    const kz = detectFromKeywords(v);
-    if (kz) { applyZone(kz); return; }
-
-    // 2. Memory cache
-    if (zoneCache[v]) { applyZone(zoneCache[v]); return; }
-
-    // 3. DB lookup
-    try {
-        const res  = await fetch("/api/place/get-zone?place=" + encodeURIComponent(v));
-        const data = await res.json();
-        console.log("DB result for", v, "→", JSON.stringify(data));
-        if (data && data.zone) {
-            zoneCache[v] = data.zone;
-            applyZone(data.zone);
-            return;
-        }
-    } catch(e) { console.error("Lookup error:", e); }
-
-    // 4. Unknown → show overlay
-    console.log("Showing zone picker for:", v);
-    showZoneOverlay(v);
-}
-
-function onPlaceBlur(val)  { scheduleResolve(val); }
 function onPlaceKeydown(e) {
-    if (e.key === "Enter" || e.key === "Tab") scheduleResolve(e.target.value);
+    if (e.key === "Enter") {
+        e.preventDefault(); // prevent form submit on Enter in place field
+        updatePlaceAndZone();
+        onCodePlaceChange();
+    }
+    if (e.key === "Tab") {
+        updatePlaceAndZone();
+        onCodePlaceChange();
+    }
 }
 
-// ── Autocomplete bindings ──────────────────────────────────
-bindAC(
-    document.getElementById("r-code"),
-    "/api/ac/code?q=",
-    item => {
-        document.getElementById("r-code").value     = item.code;
-        document.getElementById("r-fullform").value = item.code_fullform;
-    },
-    item => item.code,
-    item => item.code_fullform
-);
+// This is used when autofetch populates the place – we must correct it then too.
+function setPlaceAndZone(placeValue) {
+    const placeInput = document.getElementById("r-place");
+    placeInput.value = placeValue;
+    updatePlaceAndZone();
+}
 
-bindAC(
-    document.getElementById("r-place"),
-    "/api/ac/place?q=",
-    async v => {
-        document.getElementById("r-place").value = v;
-        await doResolve(v);
-    },
-    v => v, null
-);
+// ======================= AUTO-FETCH RATES =======================
+let autoFetchTimer = null;
 
-// ── Table row actions ──────────────────────────────────────
+function onCodePlaceChange() {
+    clearTimeout(autoFetchTimer);
+    autoFetchTimer = setTimeout(tryAutoFetch, 400);
+}
+
+async function tryAutoFetch() {
+    if (document.getElementById("rate-action").value === "edit") return;
+
+    const code  = document.getElementById("r-code").value.trim().toUpperCase();
+    let place   = document.getElementById("r-place").value.trim().toUpperCase();
+    if (!code || !place) return;
+
+    // For lookup we need the numeric zone (already computed from place)
+    const zoneNum = getZoneAndCorrectedPlace(place).zoneNum;
+    if (!zoneNum) return;
+
+    try {
+        const res = await fetch(`/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${zoneNum}`);
+        const data = await res.json();
+        if (data && data.id) {
+            document.getElementById("r-250g").value  = data.rate_250g  ?? "";
+            document.getElementById("r-500g").value  = data.rate_500g  ?? "";
+            document.getElementById("r-500g1").value = data.rate_500g_1 ?? "";
+            document.getElementById("r-1to3").value  = data.rate_1_to_3kg ?? "";
+            document.getElementById("r-3to10").value = data.rate_3_to_10kg ?? "";
+            document.getElementById("r-10kg").value  = data.rate_above_10kg ?? "";
+            if (data.zone) applyZone(data.zone);
+            showAutoFetchBadge();
+        }
+    } catch(e) { console.error("Auto-fetch error:", e); }
+}
+
+function showAutoFetchBadge() {
+    let badge = document.getElementById("autofetch-badge");
+    if (!badge) {
+        badge = document.createElement("div");
+        badge.id = "autofetch-badge";
+        badge.style.cssText = "position:fixed;top:18px;right:24px;z-index:9999;background:#198754;color:#fff;padding:7px 16px;border-radius:8px;font-size:.9rem;box-shadow:0 2px 12px rgba(0,0,0,.2);transition:opacity .5s";
+        badge.textContent = "✓ Rates auto-filled from existing record";
+        document.body.appendChild(badge);
+    }
+    badge.style.opacity = "1";
+    setTimeout(() => { badge.style.opacity = "0"; }, 2500);
+}
+
+// ======================= AUTOCOMPLETE (unchanged) =======================
+function bindAC(input, url, onSelect, labelFn, subFn) {
+    if (!input) return;
+    let drop = null;
+    let parent = input.parentNode;
+    if (!parent.querySelector(".ac-drop")) {
+        drop = document.createElement("div");
+        drop.className = "ac-drop";
+        parent.appendChild(drop);
+    } else {
+        drop = parent.querySelector(".ac-drop");
+    }
+    let timer, hi = -1;
+    function closeMe() { if (drop) drop.classList.remove("open"); hi = -1; }
+    function render(items) {
+        if (!items.length) { closeMe(); return; }
+        drop.innerHTML = "";
+        hi = 0;
+        items.forEach((item, i) => {
+            const div = document.createElement("div");
+            div.className = "ac-item" + (i === 0 ? " hi" : "");
+            const lbl = labelFn ? labelFn(item) : String(item);
+            const sub = subFn  ? subFn(item)   : "";
+            div.innerHTML = `<strong>${escapeHtml(lbl)}</strong>` + (sub ? `<div class="ac-sub">${escapeHtml(sub)}</div>` : "");
+            div.addEventListener("mousedown", e => { e.preventDefault(); onSelect(item); closeMe(); });
+            drop.appendChild(div);
+        });
+        drop.classList.add("open");
+        document.querySelectorAll(".ac-drop.open").forEach(d => { if (d !== drop) d.classList.remove("open"); });
+    }
+    function moveHi(delta) { const els = drop.querySelectorAll(".ac-item"); if (!els.length) return; if (hi >= 0) els[hi]?.classList.remove("hi"); hi = Math.max(0, Math.min(els.length - 1, (hi < 0 ? 0 : hi) + delta)); els[hi]?.classList.add("hi"); els[hi]?.scrollIntoView({ block: "nearest" }); }
+    input.addEventListener("input", () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (!q) { closeMe(); return; }
+        timer = setTimeout(async () => {
+            try {
+                const data = await fetch(url + encodeURIComponent(q)).then(r => r.json());
+                render(data);
+            } catch(e) { console.error(e); }
+        }, 80);
+    });
+    input.addEventListener("keydown", e => {
+        if (!drop.classList.contains("open")) return;
+        if      (e.key === "ArrowDown") { e.preventDefault(); moveHi(1); }
+        else if (e.key === "ArrowUp")   { e.preventDefault(); moveHi(-1); }
+        else if (e.key === "Enter")     { const h = drop.querySelector(".ac-item.hi"); if (h) { e.preventDefault(); e.stopImmediatePropagation(); h.dispatchEvent(new MouseEvent("mousedown")); } }
+        else if (e.key === "Escape")    closeMe();
+    });
+    input.addEventListener("blur", () => setTimeout(closeMe, 160));
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+// ======================= TABLE ROW ACTIONS =======================
 function rateEdit(r) {
     document.getElementById("rate-action").value   = "edit";
     document.getElementById("rate-edit-id").value  = r.id;
@@ -365,11 +401,8 @@ function rateEdit(r) {
     document.getElementById("r-1to3").value        = r.rate_1_to_3kg;
     document.getElementById("r-3to10").value       = r.rate_3_to_10kg;
     document.getElementById("r-10kg").value        = r.rate_above_10kg;
-    document.getElementById("r-fuel").value        = r.fuel;
-    const el = document.getElementById("r-zone");
-    el.value  = r.zone || "";
-    const c   = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
-    el.style.background = c[r.zone] || "#f0f4ff";
+    if (r.zone) applyZone(r.zone);
+    else updatePlaceAndZone();
     document.getElementById("r-save-lbl").textContent     = "Update";
     document.getElementById("r-cancel-btn").style.display = "inline-block";
     document.querySelectorAll(".editing-row").forEach(e => e.classList.remove("editing-row"));
@@ -380,12 +413,12 @@ function rateEdit(r) {
 
 function rateCopy(r) {
     rateEdit(r);
-    document.getElementById("rate-action").value       = "add";
-    document.getElementById("rate-edit-id").value      = "";
-    document.getElementById("r-place").value           = "";
-    document.getElementById("r-zone").value            = "";
+    document.getElementById("rate-action").value  = "add";
+    document.getElementById("rate-edit-id").value = "";
+    document.getElementById("r-place").value      = "";
+    document.getElementById("r-zone").value       = "";
     document.getElementById("r-zone").style.background = "#f0f4ff";
-    document.getElementById("r-save-lbl").textContent  = "Save";
+    document.getElementById("r-save-lbl").textContent = "Save";
     document.getElementById("r-place").focus();
 }
 
@@ -393,21 +426,51 @@ function rateCancel() {
     document.getElementById("rate-action").value      = "add";
     document.getElementById("rate-edit-id").value     = "";
     ["r-code","r-fullform","r-place"].forEach(id => document.getElementById(id).value = "");
-    ["r-250g","r-500g","r-500g1","r-1to3","r-3to10","r-10kg","r-fuel"]
-        .forEach(id => document.getElementById(id).value = "0");
-    clearZone();
+    ["r-250g","r-500g","r-500g1","r-1to3","r-3to10","r-10kg"]
+        .forEach(id => document.getElementById(id).value = "");
+    applyZone(null);
     document.getElementById("r-save-lbl").textContent     = "Save";
     document.getElementById("r-cancel-btn").style.display = "none";
     document.querySelectorAll(".editing-row").forEach(e => e.classList.remove("editing-row"));
-    modalOpenFor = null;
 }
 
-// ── NEW: Auto‑submit when limit dropdown changes ───────────
+function confirmDel(formId) {
+    if (confirm("Delete this rate entry?")) {
+        document.getElementById(formId).submit();
+    }
+}
+
+// ======================= LIMIT DROPDOWN AUTO-SUBMIT =======================
 document.getElementById('limit-select').addEventListener('change', function() {
     const url = new URL(window.location.href);
     url.searchParams.set('limit', this.value);
-    url.searchParams.set('page', '1');   // reset to first page
+    url.searchParams.set('page', '1');
     window.location.href = url.toString();
+});
+
+// ======================= INITIALISE =======================
+document.addEventListener("DOMContentLoaded", () => {
+    bindAC(
+        document.getElementById("r-code"),
+        "/api/ac/code?q=",
+        item => {
+            document.getElementById("r-code").value     = item.code;
+            document.getElementById("r-fullform").value = item.code_fullform;
+            onCodePlaceChange();
+        },
+        item => item.code,
+        item => item.code_fullform
+    );
+    bindAC(
+        document.getElementById("r-place"),
+        "/api/ac/place?q=",
+        v => {
+            setPlaceAndZone(v);
+            onCodePlaceChange();
+        },
+        v => v, null
+    );
+    updatePlaceAndZone();
 });
 </script>
 {% endblock %}

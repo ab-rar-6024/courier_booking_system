@@ -1225,6 +1225,189 @@ def api_dest_zone_lookup():
     db.close()
     return jsonify({})
 
+# ============================================================
+# MISSING ROUTES — paste these into your PostgreSQL app.py
+# (anywhere before the `if __name__ == "__main__":` block)
+# ============================================================
+
+
+# ---------------- SMART ZONE API ----------------
+
+@app.route("/api/smart-zone")
+def api_smart_zone():
+    """
+    Detect zone from destination text using keyword matching.
+    Priority:
+      1. place_zones table  (manually saved overrides, by place_code)
+      2. place_zones table  (by exact place name)
+      3. rates table        (exact match for this code + place)
+      4. rates table        (partial match for this code)
+      5. Built-in keyword map (Chennai / TN / South / Metro / ROI)
+    Returns: { zone, label, source, place }
+    """
+    dest = request.args.get("dest", "").strip().upper()
+    code = request.args.get("code", "").strip().upper()
+    if not dest:
+        return jsonify({})
+
+    db  = get_db_connection()
+    cur = db.cursor()
+
+    # 1. place_zones override by place_code
+    cur.execute(
+        "SELECT place, zone FROM place_zones WHERE UPPER(place_code) = %s LIMIT 1",
+        (dest,)
+    )
+    row = cur.fetchone()
+    if row:
+        db.close()
+        return jsonify({**dict(row), "source": "saved", "label": _zone_label(row["zone"])})
+
+    # 2. place_zones override by exact place name
+    cur.execute(
+        "SELECT zone FROM place_zones WHERE UPPER(place) = %s LIMIT 1",
+        (dest,)
+    )
+    row = cur.fetchone()
+    if row:
+        db.close()
+        return jsonify({
+            "place": dest,
+            "zone": row["zone"],
+            "source": "saved",
+            "label": _zone_label(row["zone"])
+        })
+
+    # 3. rates table — exact match (code + place)
+    if code:
+        cur.execute(
+            "SELECT place, zone FROM rates "
+            "WHERE UPPER(code) = %s AND UPPER(place) = %s LIMIT 1",
+            (code, dest)
+        )
+        row = cur.fetchone()
+        if row:
+            db.close()
+            return jsonify({**dict(row), "source": "rate_exact", "label": _zone_label(row["zone"])})
+
+        # 4. rates table — partial match
+        cur.execute(
+            "SELECT place, zone FROM rates WHERE UPPER(code) = %s ORDER BY zone",
+            (code,)
+        )
+        all_places = [dict(r) for r in cur.fetchall()]
+        for p in all_places:
+            pu = p["place"].upper()
+            if dest in pu or pu in dest:
+                db.close()
+                return jsonify({
+                    "place": p["place"],
+                    "zone":  p["zone"],
+                    "source": "rate_partial",
+                    "label": _zone_label(p["zone"])
+                })
+
+    db.close()
+
+    # 5. Built-in keyword map (no DB needed)
+    zone, label = _keyword_zone(dest)
+    if zone:
+        return jsonify({
+            "place":  dest.title(),
+            "zone":   zone,
+            "source": "keyword",
+            "label":  label
+        })
+
+    return jsonify({})
+
+
+# ---------------- HELPER: zone number → label ----------------
+
+def _zone_label(z):
+    return {
+        1: "Chennai",
+        2: "Tamil Nadu",
+        3: "South India",
+        4: "North Metro",
+        5: "ROI",
+    }.get(int(z), "ROI")
+
+
+# ---------------- HELPER: keyword → zone number ----------------
+
+def _keyword_zone(dest):
+    """Pure keyword-based zone detection (fallback, no DB call)."""
+
+    ZONE1 = [
+        "CHENNAI", "MADRAS", "TAMBARAM", "VELACHERY", "ADYAR",
+        "ANNA NAGAR", "T NAGAR", "NUNGAMBAKKAM", "PERAMBUR",
+        "ROYAPURAM", "EGMORE", "KODAMBAKKAM", "CHROMPET", "SHOLINGANALLUR",
+        "PORUR", "AMBATTUR", "AVADI", "POONAMALLEE", "PALLAVARAM",
+        "PERUNGUDI", "THIRUVANMIYUR", "MYLAPORE", "TRIPLICANE",
+        "WASHERMANPET", "TONDIARPET",
+    ]
+
+    ZONE2_TN = [
+        "COIMBATORE", "MADURAI", "TRICHY", "TIRUCHIRAPPALLI",
+        "SALEM", "TIRUNELVELI", "VELLORE", "ERODE", "TIRUPPUR",
+        "THOOTHUKUDI", "TUTICORIN", "DINDIGUL", "THANJAVUR",
+        "KANCHIPURAM", "KUMBAKONAM", "NAGERCOIL", "SIVAGANGAI",
+        "NAMAKKAL", "KARUR", "PUDUKOTTAI", "RAMANATHAPURAM",
+        "VIRUDHUNAGAR", "CUDDALORE", "NAGAPATTINAM", "OOTY",
+        "UDHAGAMANDALAM", "KODAIKANAL", "HOSUR", "RANIPET",
+        "TIRUVANNAMALAI", "VILLUPURAM", "ARIYALUR", "PERAMBALUR",
+        "KALLAKURICHI", "TENKASI", "KRISHNAGIRI", "DHARMAPURI",
+        "THENI", "NILGIRIS", "CHENGALPATTU", "TIRUPATTUR",
+    ]
+
+    ZONE3_SOUTH = [
+        # Kerala
+        "KERALA", "THIRUVANANTHAPURAM", "TRIVANDRUM", "KOCHI", "COCHIN",
+        "KOZHIKODE", "CALICUT", "THRISSUR", "KOLLAM", "PALAKKAD",
+        "ALAPPUZHA", "ALLEPPEY", "KANNUR", "MALAPPURAM", "KASARAGOD",
+        "WAYANAD", "IDUKKI", "PATHANAMTHITTA", "ERNAKULAM", "KOTTAYAM",
+        # Karnataka
+        "KARNATAKA", "BENGALURU", "BANGALORE", "MYSURU", "MYSORE",
+        "HUBLI", "DHARWAD", "MANGALURU", "MANGALORE", "BELAGAVI",
+        "BELGAUM", "GULBARGA", "KALABURAGI", "DAVANAGERE", "BELLARY",
+        "VIJAYAPURA", "BIJAPUR", "SHIMOGA", "SHIVAMOGGA", "TUMKUR",
+        "UDUPI", "HASSAN", "BIDAR", "RAICHUR", "BAGALKOT", "CHITRADURGA",
+        # Andhra Pradesh
+        "ANDHRA", "VISAKHAPATNAM", "VIZAG", "VIJAYAWADA", "GUNTUR",
+        "NELLORE", "KURNOOL", "RAJAHMUNDRY", "KAKINADA", "TIRUPATI",
+        "ANANTAPUR", "KADAPA", "CHITTOOR", "ELURU", "ONGOLE", "VIZIANAGARAM",
+        # Telangana
+        "TELANGANA", "HYDERABAD", "WARANGAL", "NIZAMABAD", "KHAMMAM",
+        "KARIMNAGAR", "RAMAGUNDAM", "SECUNDERABAD", "NALGONDA",
+        "ADILABAD", "MAHBUBNAGAR", "SANGAREDDY", "SIDDIPET",
+    ]
+
+    ZONE4_METRO = [
+        # Delhi NCR
+        "DELHI", "NEW DELHI", "GURGAON", "GURUGRAM", "NOIDA",
+        "FARIDABAD", "GHAZIABAD", "GREATER NOIDA",
+        # Mumbai
+        "MUMBAI", "BOMBAY", "THANE", "NAVI MUMBAI", "PUNE",
+        # Kolkata
+        "KOLKATA", "CALCUTTA", "HOWRAH", "DURGAPUR", "ASANSOL",
+    ]
+
+    for kw in ZONE1:
+        if kw in dest:
+            return 1, "Chennai"
+    for kw in ZONE2_TN:
+        if kw in dest:
+            return 2, "Tamil Nadu"
+    for kw in ZONE3_SOUTH:
+        if kw in dest:
+            return 3, "South India"
+    for kw in ZONE4_METRO:
+        if kw in dest:
+            return 4, "North Metro"
+
+    return 5, "ROI"
+
 # ------------------------------------------------------------
 # Run the app
 # ------------------------------------------------------------

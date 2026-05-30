@@ -22,6 +22,7 @@
 <form id="bk-form">
 <input type="hidden" name="_action"  id="bk-action"  value="add">
 <input type="hidden" name="edit_id"  id="bk-edit-id" value="">
+<input type="hidden" name="fuel"     value="0">
 <div class="row g-2">
     <!-- 1. CODE -->
     <div class="col-md-2">
@@ -51,43 +52,47 @@
         <label>DESTINATION</label>
         <div class="ac-wrap">
             <input name="destination" id="bk-dest" class="form-control" autocomplete="off"
-                   placeholder="City / place or code" oninput="onDestInput(this.value)"
-                   onblur="onDestBlur(this.value)" onkeydown="onDestKeydown(event)">
+                   placeholder="City / place or code"
+                   oninput="onDestInput(this.value)"
+                   onblur="onDestBlur(this.value)"
+                   onkeydown="onDestKeydown(event)">
             <div class="ac-drop" id="bk-dest-drop"></div>
         </div>
+        <!-- Zone badge appears here dynamically -->
+        <div id="zone-badge-wrap" style="margin-top:4px; min-height:22px;"></div>
     </div>
     <!-- 5. WEIGHT -->
     <div class="col-md-1">
         <label>WEIGHT</label>
-        <input type="number" step="0.001" name="weight" id="bk-weight" class="form-control" placeholder="0.000" oninput="calcRate()">
+        <input type="number" step="0.001" name="weight" id="bk-weight" class="form-control"
+               placeholder="0.000" oninput="onWeightInput()">
     </div>
     <!-- 6. COURIER -->
     <div class="col-md-2">
         <label>COURIER</label>
         <input name="courier" id="bk-courier" class="form-control">
     </div>
-    <!-- 7. ZONE -->
+    <!-- 7. ZONE (auto) -->
     <div class="col-md-2">
         <label>ZONE <small class="text-muted">(auto)</small></label>
-        <input name="zone" id="bk-zone" class="form-control fw-bold text-center" readonly placeholder="Auto"
-               style="background:#f0f4ff; border:2px solid #6c8ebf; color:#1a3a6b; cursor:not-allowed; font-size:1.1rem;">
+        <input name="zone" id="bk-zone" class="form-control fw-bold text-center" readonly
+               placeholder="Auto"
+               style="background:#f0f4ff; border:2px solid #6c8ebf; color:#1a3a6b;
+                      cursor:not-allowed; font-size:1.1rem;">
     </div>
-    <!-- 8. AUTO AMOUNT (now editable) -->
+    <!-- 8. AMOUNT -->
     <div class="col-md-2">
-        <label>Auto Amount</label>
-        <input type="number" step="0.01" name="auto_amount" id="bk-auto" class="form-control" placeholder="0.00">
+        <label>Amount</label>
+        <input type="number" step="0.01" name="auto_amount" id="bk-auto"
+               class="form-control" placeholder="0.00">
     </div>
-    <!-- 9. FUEL (now editable) -->
-    <div class="col-md-1">
-        <label>Fuel</label>
-        <input type="number" step="0.01" name="fuel" id="bk-fuel" class="form-control" placeholder="0.00">
-    </div>
-    <!-- 10. TOTAL (now editable) -->
+    <!-- 9. TOTAL -->
     <div class="col-md-2">
         <label>Total</label>
-        <input type="number" step="0.01" name="total_display" id="bk-total" class="form-control" placeholder="0.00">
+        <input type="number" step="0.01" name="total_amount" id="bk-total"
+               class="form-control" placeholder="0.00">
     </div>
-    <!-- 11. CLIENT NAME -->
+    <!-- 10. CLIENT NAME -->
     <div class="col-md-2">
         <label>Client Name</label>
         <div class="ac-wrap">
@@ -95,31 +100,48 @@
             <div class="ac-drop" id="bk-client-drop"></div>
         </div>
     </div>
-    <!-- 12. INV NO -->
+    <!-- 11. INV NO -->
     <div class="col-md-2">
         <label>INV NO</label>
         <input name="inv_no" id="bk-invno" class="form-control">
     </div>
-    <!-- 13. INV DATE -->
+    <!-- 12. INV DATE -->
     <div class="col-md-2">
         <label>INV DATE</label>
         <input name="inv_date" id="bk-invdate" class="form-control" placeholder="dd/mm/yyyy">
     </div>
+    <!-- Rate Info Bar -->
     <div class="col-12">
-        <div id="rate-info" style="font-size:12px;min-height:18px;margin-top:2px;"></div>
+        <div id="rate-info" style="font-size:12px; min-height:18px; margin-top:2px;"></div>
     </div>
+    <!-- Save / Cancel -->
     <div class="col-md-2 d-flex align-items-end gap-1">
         <button type="submit" class="btn btn-success flex-fill btn-submit" id="bk-submit-btn">
             <i class="fa fa-save"></i> <span id="bk-save-lbl">Save</span>
         </button>
-        <button type="button" class="btn btn-secondary" id="bk-cancel-btn" style="display:none" onclick="bkCancel()">&#x2715;</button>
+        <button type="button" class="btn btn-secondary" id="bk-cancel-btn"
+                style="display:none" onclick="bkCancel()">&#x2715;</button>
     </div>
 </div>
 </form>
 </div>
 
-<!-- TABLE (populated by JavaScript) -->
+<!-- SEARCH & TABLE -->
 <div class="card p-3">
+    <!-- Search bar with button -->
+    <div class="mb-2 d-flex gap-2 align-items-center">
+        <input type="text" id="searchInput" class="form-control"
+               placeholder="Search by any field (AWB, destination, client, code, zone...)">
+        <button type="button" class="btn btn-primary" id="btn-search" onclick="filterTable()">
+            <i class="fa fa-search"></i> Search
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-clear-search" onclick="clearSearch()" style="display:none;" title="Clear search">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+    <!-- Entry count info -->
+    <div id="search-count" style="font-size:13px; color:#555; margin-bottom:8px; min-height:20px;"></div>
+
     <div id="table-loading" class="text-center py-3" style="display:none;">
         <i class="fa fa-spinner fa-spin"></i> Loading...
     </div>
@@ -128,14 +150,83 @@
             <thead class="table-dark">
                 <tr>
                     <th>#</th><th>Code</th><th>Date</th><th>AWB</th><th>Dest</th><th>Wt</th>
-                    <th>Courier</th><th>Zone</th><th>Auto</th><th>Fuel</th><th>Total</th>
+                    <th>Courier</th><th>Zone</th><th>Amount</th><th>Total</th>
                     <th>Client</th><th>Inv No</th><th>Inv Date</th><th>Action</th>
                 </tr>
             </thead>
             <tbody id="booking-table-body">
-                <tr><td colspan="15" class="text-center">Loading...</td></tr>
+                <tr><td colspan="14" class="text-center">Loading...</td></tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     ZONE SELECTION POPUP (unknown destination)
+     ═══════════════════════════════════════════════ -->
+<div id="zone-overlay"
+     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+            z-index:99999; background:rgba(0,0,0,0.65);
+            align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:14px; width:420px;
+                box-shadow:0 16px 60px rgba(0,0,0,0.45); overflow:hidden; animation:popIn .25s ease;">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#ff9800,#f44336); padding:16px 22px; position:relative;">
+            <strong style="font-size:1.05rem; color:#fff;">⚠ Unknown Destination – Select Zone</strong>
+            <button onclick="hideZoneOverlay()"
+                    style="position:absolute;right:14px;top:12px;background:none;border:none;
+                           color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+        </div>
+        <!-- Body -->
+        <div style="padding:20px 22px;">
+            <p style="margin-bottom:4px;">
+                Destination:&nbsp;
+                <strong id="zone-dest-label"
+                        style="color:#0d6efd; text-transform:uppercase; font-size:1.05rem;"></strong>
+            </p>
+            <p style="font-size:.82rem; color:#6c757d; margin-bottom:14px;">
+                This destination is not mapped to any zone.<br>
+                Pick a zone below — it will be <em>remembered</em> for future entries.
+            </p>
+
+            <!-- Optional place code -->
+            <div style="margin-bottom:16px;">
+                <label style="font-size:.82rem; font-weight:600; color:#495057;
+                               display:block; margin-bottom:4px;">
+                    Place Code
+                    <span style="font-weight:400; color:#6c757d;">(optional, e.g. MAA, BLR)</span>
+                </label>
+                <input type="text" id="zone-place-code" placeholder="Enter short place code…"
+                       style="width:100%; padding:8px 10px; border:1.5px solid #ced4da;
+                              border-radius:7px; font-size:.93rem; text-transform:uppercase;
+                              transition:border .2s;"
+                       oninput="this.value=this.value.toUpperCase()">
+            </div>
+
+            <!-- Zone buttons -->
+            <div style="display:flex; flex-direction:column; gap:9px;">
+                <button class="zone-btn" onclick="confirmZone(1)"
+                        style="background:linear-gradient(90deg,#0d6efd,#3b93ff);">
+                    <span class="zbadge">Z1</span> CHENNAI
+                </button>
+                <button class="zone-btn" onclick="confirmZone(2)"
+                        style="background:linear-gradient(90deg,#198754,#2dba79);">
+                    <span class="zbadge">Z2</span> TAMIL NADU
+                </button>
+                <button class="zone-btn" onclick="confirmZone(3)"
+                        style="background:linear-gradient(90deg,#e67e22,#f39c12); color:#000;">
+                    <span class="zbadge" style="color:#000;">Z3</span> SOUTH – KERALA · KARNATAKA · ANDHRA · TELANGANA
+                </button>
+                <button class="zone-btn" onclick="confirmZone(4)"
+                        style="background:linear-gradient(90deg,#dc3545,#e55365);">
+                    <span class="zbadge">Z4</span> NORTH METRO – DELHI · MUMBAI · KOLKATA
+                </button>
+                <button class="zone-btn" onclick="confirmZone(5)"
+                        style="background:linear-gradient(90deg,#495057,#6c757d);">
+                    <span class="zbadge">Z5</span> ROI – REST OF INDIA
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -143,395 +234,757 @@
 
 {% block scripts %}
 <script>
-// ------------------------------
-// GLOBALS & CACHE
-// ------------------------------
+// ══════════════════════════════════════════════════════════════
+//  GLOBALS
+// ══════════════════════════════════════════════════════════════
 let currentView = 'recent';
 const destCache = {};
-let destTimer = null;
+let destTimer   = null;
+let pendingDest = null;
+let lastRateRow = null;   // cached rate row for current code+zone
 
 function setVal(id, v) { document.getElementById(id).value = v; }
 function getVal(id)    { return (document.getElementById(id).value || "").trim().toUpperCase(); }
 
-// ------------------------------
-// TABLE LOAD (AJAX)
-// ------------------------------
-async function loadTable(view) {
-    const tbody = document.getElementById('booking-table-body');
-    const loadingDiv = document.getElementById('table-loading');
-    loadingDiv.style.display = 'block';
-    tbody.innerHTML = '<tr><td colspan="15" class="text-center">Loading...</td></tr>';
+// ══════════════════════════════════════════════════════════════
+//  ZONE KEYWORD MAP  (pure client-side fast detection)
+// ══════════════════════════════════════════════════════════════
+const ZONE_MAP = {
+  1: [
+    "CHENNAI","MADRAS","TAMBARAM","VELACHERY","ADYAR","ANNA NAGAR","T NAGAR",
+    "NUNGAMBAKKAM","PERAMBUR","ROYAPURAM","EGMORE","KODAMBAKKAM","CHROMPET",
+    "SHOLINGANALLUR","PORUR","AMBATTUR","AVADI","POONAMALLEE","PALLAVARAM",
+    "PERUNGUDI","THIRUVANMIYUR","MYLAPORE","TRIPLICANE","WASHERMANPET",
+    "TONDIARPET","GUINDY","BESANT NAGAR","KILPAUK","CHETPET","AMINJIKARAI",
+    "VILLIVAKKAM","THIRUVOTTIYUR","MANALI","MADHAVARAM","KOLATHUR","MOGAPPAIR",
+    "VIRUGAMBAKKAM","ASHOK NAGAR","K.K. NAGAR","WEST MAMBALAM","SAIDAPET",
+    "KOTTURPURAM","INJAMBAKKAM","THORAIPAKKAM","PERUNGALATHUR","PAMMAL",
+    "SELAIYUR","MUDICHUR","URAPAKKAM","GUDUVANCHERY","CHENGALPATTU"
+  ],
+  2: [
+    "COIMBATORE","MADURAI","TRICHY","TIRUCHIRAPPALLI","SALEM","TIRUNELVELI",
+    "VELLORE","ERODE","TIRUPPUR","THOOTHUKUDI","TUTICORIN","DINDIGUL",
+    "THANJAVUR","KANCHIPURAM","KUMBAKONAM","NAGERCOIL","SIVAGANGAI",
+    "NAMAKKAL","KARUR","PUDUKOTTAI","RAMANATHAPURAM","VIRUDHUNAGAR",
+    "CUDDALORE","NAGAPATTINAM","OOTY","UDHAGAMANDALAM","KODAIKANAL",
+    "HOSUR","RANIPET","TIRUVANNAMALAI","VILLUPURAM","ARIYALUR","PERAMBALUR",
+    "KALLAKURICHI","TENKASI","KRISHNAGIRI","DHARMAPURI","THENI","NILGIRIS",
+    "TIRUPATTUR","MAYILADUTHURAI","RAMANATHAPURAM","SIVAKASI","RAJAPALAYAM",
+    "TAMILNADU","TAMIL NADU","PONDICHERRY","PUDUCHERRY","KARAIKAL"
+  ],
+  3: [
+    // Kerala
+    "KERALA","THIRUVANANTHAPURAM","TRIVANDRUM","KOCHI","COCHIN","KOZHIKODE",
+    "CALICUT","THRISSUR","KOLLAM","PALAKKAD","ALAPPUZHA","ALLEPPEY","KANNUR",
+    "MALAPPURAM","KASARAGOD","WAYANAD","IDUKKI","PATHANAMTHITTA","ERNAKULAM",
+    "KOTTAYAM","TRISSUR","THRISSUR","ALAPUZHA",
+    // Karnataka
+    "KARNATAKA","BENGALURU","BANGALORE","MYSURU","MYSORE","HUBLI","DHARWAD",
+    "MANGALURU","MANGALORE","BELAGAVI","BELGAUM","GULBARGA","KALABURAGI",
+    "DAVANAGERE","BELLARY","VIJAYAPURA","BIJAPUR","SHIMOGA","SHIVAMOGGA",
+    "TUMKUR","UDUPI","HASSAN","BIDAR","RAICHUR","BAGALKOT","CHITRADURGA",
+    "GADAG","KOPPAL","YADGIR","CHAMARAJANAGAR","MANDYA","CHIKMAGALUR",
+    "CHIKKAMAGALURU","KODAGU","COORG","RAMNAGARA","CHIKKABALLAPUR",
+    // Andhra Pradesh
+    "ANDHRA","VISAKHAPATNAM","VIZAG","VIJAYAWADA","GUNTUR","NELLORE",
+    "KURNOOL","RAJAHMUNDRY","KAKINADA","TIRUPATI","ANANTAPUR","KADAPA",
+    "CHITTOOR","ELURU","ONGOLE","VIZIANAGARAM","SRIKAKULAM","EAST GODAVARI",
+    "WEST GODAVARI","PRAKASAM","YSR KADAPA",
+    // Telangana
+    "TELANGANA","HYDERABAD","WARANGAL","NIZAMABAD","KHAMMAM","KARIMNAGAR",
+    "RAMAGUNDAM","SECUNDERABAD","NALGONDA","ADILABAD","MAHBUBNAGAR",
+    "SANGAREDDY","SIDDIPET","MANCHERIAL","JAGTIAL","NIRMAL","NAGARKURNOOL",
+    "SURYAPET","YADADRI","MEDCHAL","RANGAREDDY","MEDAK","VIKARABAD"
+  ],
+  4: [
+    // Delhi NCR
+    "DELHI","NEW DELHI","GURGAON","GURUGRAM","NOIDA","FARIDABAD",
+    "GHAZIABAD","GREATER NOIDA","DWARKA","ROHINI","PITAMPURA","JANAKPURI",
+    // Mumbai
+    "MUMBAI","BOMBAY","THANE","NAVI MUMBAI","PUNE","NASHIK","NAGPUR",
+    "KALYAN","VASAI","MIRA ROAD","BHIWANDI","PANVEL","KHARGHAR",
+    // Kolkata
+    "KOLKATA","CALCUTTA","HOWRAH","DURGAPUR","ASANSOL","SILIGURI",
+    "HALDIA","KHARAGPUR","KOLKATTA"
+  ]
+};
 
-    try {
-        let url = '/api/bookings';
-        if (view === 'all') url += '?limit=all';
-        else url += '?limit=10';
-        const resp = await fetch(url);
-        const bookings = await resp.json();
-
-        if (!bookings.length) {
-            tbody.innerHTML = '<tr><td colspan="15" class="text-center">No Records</td></tr>';
-            loadingDiv.style.display = 'none';
-            return;
-        }
-
-        let html = '';
-        bookings.forEach((b, idx) => {
-            html += `<tr id="brow-${b.id}">
-                <td>${idx+1}</td>
-                <td><strong>${escapeHtml(b.code)}</strong></td>
-                <td>${escapeHtml(b.booking_date)}</td>
-                <td>${escapeHtml(b.awb_no)}</td>
-                <td>${escapeHtml(b.destination)}</td>
-                <td>${b.weight}</td>
-                <td>${escapeHtml(b.courier)}</td>
-                <td>${escapeHtml(b.zone)}</td>
-                <td>${b.auto_amount}</td>
-                <td>${b.fuel}</td>
-                <td><strong>${b.total_amount}</strong></td>
-                <td>${escapeHtml(b.client_name)}</td>
-                <td>${escapeHtml(b.inv_no)}</td>
-                <td>${escapeHtml(b.inv_date)}</td>
-                <td style="white-space:nowrap">
-                    <button class="btn btn-warning btn-act btn-sm" onclick='bkEdit(${JSON.stringify(b)})'>
-                        <i class="fa fa-pen"></i>
-                    </button>
-                    <button class="btn btn-info btn-act btn-sm text-white" onclick='bkCopy(${JSON.stringify(b)})'>
-                        <i class="fa fa-copy"></i>
-                    </button>
-                    <button type="button" class="btn btn-danger btn-act btn-sm" onclick="deleteBooking(${b.id})">
-                        <i class="fa fa-trash"></i>
-                    </button>
-                </td>
-            </tr>`;
-        });
-        tbody.innerHTML = html;
-    } catch(e) {
-        console.error(e);
-        tbody.innerHTML = '<tr><td colspan="15" class="text-center text-danger">Failed to load data</td></tr>';
-    } finally {
-        loadingDiv.style.display = 'none';
+/**
+ * Client-side keyword zone detection.
+ * Returns { zone, label } or null.
+ */
+function detectZoneByKeyword(dest) {
+  const d = dest.trim().toUpperCase();
+  for (const [z, keywords] of Object.entries(ZONE_MAP)) {
+    for (const kw of keywords) {
+      if (d === kw || d.includes(kw) || kw.includes(d)) {
+        return { zone: parseInt(z), label: ZONE_LABELS[z] };
+      }
     }
+  }
+  return null;   // unknown → show popup
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    });
+const ZONE_LABELS = {
+  1: "Chennai", 2: "Tamil Nadu", 3: "South India", 4: "North Metro", 5: "ROI"
+};
+const ZONE_COLORS = {
+  1: { bg:"#cce5ff", color:"#004085", badge:"#0d6efd" },
+  2: { bg:"#d4edda", color:"#155724", badge:"#198754" },
+  3: { bg:"#fff3cd", color:"#856404", badge:"#e67e22" },
+  4: { bg:"#f8d7da", color:"#721c24", badge:"#dc3545" },
+  5: { bg:"#e2e3e5", color:"#383d41", badge:"#6c757d" },
+};
+
+// ══════════════════════════════════════════════════════════════
+//  ZONE BADGE
+// ══════════════════════════════════════════════════════════════
+function showZoneBadge(zone, label, source) {
+  const wrap = document.getElementById("zone-badge-wrap");
+  const c = ZONE_COLORS[zone] || ZONE_COLORS[5];
+  const src = { saved:"💾 saved", rate_exact:"📋 rate table",
+                rate_partial:"📋 partial match", keyword:"🔍 auto-detected" }[source] || "";
+  wrap.innerHTML = `
+    <span style="display:inline-flex;align-items:center;gap:6px;
+                 background:${c.bg};color:${c.color};
+                 padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">
+      <span style="background:${c.badge};color:#fff;
+                   border-radius:50%;width:18px;height:18px;
+                   display:inline-flex;align-items:center;justify-content:center;
+                   font-size:10px;">Z${zone}</span>
+      Zone ${zone} – ${label}
+      ${src ? `<span style="font-weight:400;opacity:.75;font-size:11px;">(${src})</span>` : ""}
+    </span>`;
+}
+function clearZoneBadge() {
+  document.getElementById("zone-badge-wrap").innerHTML = "";
 }
 
-// ------------------------------
-// DELETE (AJAX)
-// ------------------------------
-async function deleteBooking(id) {
-    if (!confirm('Delete this booking?')) return;
-    const formData = new FormData();
-    formData.append('_action', 'delete');
-    formData.append('del_id', id);
-    try {
-        const resp = await fetch('/booking-entry', { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error('Delete failed');
-        await loadTable(currentView);
-        bkCancel();
-    } catch(err) {
-        alert('Delete error: ' + err.message);
-    }
-}
-
-// ------------------------------
-// FORM SUBMIT (ADD/EDIT) AJAX
-// ------------------------------
-document.getElementById('bk-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    try {
-        const resp = await fetch('/booking-entry', { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error('Server error');
-        await loadTable(currentView);
-        bkCancel();
-        const infoDiv = document.getElementById('rate-info');
-        infoDiv.style.color = '#198754';
-        infoDiv.innerHTML = '✓ Saved successfully.';
-        setTimeout(() => {
-            if (infoDiv.innerHTML === '✓ Saved successfully.') infoDiv.innerHTML = '';
-        }, 2000);
-    } catch(err) {
-        alert('Error saving data: ' + err.message);
-    }
-});
-
-// ------------------------------
-// VIEW SWITCH
-// ------------------------------
-document.getElementById('btn-show-recent').addEventListener('click', () => {
-    currentView = 'recent';
-    loadTable('recent');
-});
-document.getElementById('btn-show-all').addEventListener('click', () => {
-    if (confirm('Showing all 40,000+ records may be slow. Continue?')) {
-        currentView = 'all';
-        loadTable('all');
-    }
-});
-
-// ------------------------------
-// EDIT / COPY / CANCEL
-// ------------------------------
-function bkEdit(b) {
-    clearAwbWarning();
-    document.getElementById("bk-action").value  = "edit";
-    document.getElementById("bk-edit-id").value = b.id;
-    document.getElementById("bk-code").value    = b.code;
-    document.getElementById("bk-date").value    = b.booking_date;
-    document.getElementById("bk-awb").value     = b.awb_no      || "";
-    document.getElementById("bk-dest").value    = b.destination || "";
-    document.getElementById("bk-weight").value  = b.weight;
-    document.getElementById("bk-courier").value = b.courier     || "";
-    document.getElementById("bk-auto").value    = b.auto_amount;
-    document.getElementById("bk-fuel").value    = b.fuel;
-    document.getElementById("bk-total").value   = b.total_amount;
-    document.getElementById("bk-client").value  = b.client_name || "";
-    document.getElementById("bk-invno").value   = b.inv_no      || "";
-    document.getElementById("bk-invdate").value = b.inv_date    || "";
-
-    document.getElementById("bk-save-lbl").textContent     = "Update";
-    document.getElementById("bk-cancel-btn").style.display = "inline-block";
-    document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
-    const row = document.getElementById("brow-" + b.id);
-    if (row) row.classList.add("editing-row");
-    window.scrollTo({top:0, behavior:"smooth"});
-    document.getElementById("bk-code").focus();
-    document.getElementById("rate-info").textContent = "";
-    if (b.destination) resolveDestination(b.destination);
-}
-
-function bkCopy(b) {
-    bkEdit(b);
-    document.getElementById("bk-action").value  = "add";
-    document.getElementById("bk-edit-id").value = "";
-    document.getElementById("bk-awb").value     = "";
-    document.getElementById("bk-invno").value   = "";
-    document.getElementById("bk-save-lbl").textContent = "Save";
-}
-
-function bkCancel() {
-    clearAwbWarning();
-    document.getElementById("bk-action").value  = "add";
-    document.getElementById("bk-edit-id").value = "";
-    ["bk-code","bk-awb","bk-dest","bk-courier","bk-client","bk-invno","bk-invdate"]
-        .forEach(id => document.getElementById(id).value = "");
-    ["bk-weight","bk-auto","bk-fuel","bk-total"]
-        .forEach(id => document.getElementById(id).value = "");
-    document.getElementById("bk-date").value = new Date().toISOString().split("T")[0];
-    clearZone();
-    document.getElementById("bk-save-lbl").textContent     = "Save";
-    document.getElementById("bk-cancel-btn").style.display = "none";
-    document.getElementById("rate-info").textContent        = "";
-    document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
-}
-
-// ------------------------------
-// ZONE & RATE CALCULATION
-// ------------------------------
-function applyZone(place, zoneNum) {
-    const el = document.getElementById("bk-zone");
-    el.value = zoneNum;
-    el.dataset.place = place;
-    const colors = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
-    el.style.background = colors[zoneNum] || "#f0f4ff";
-    el.style.color = "#1a3a6b";
+// ══════════════════════════════════════════════════════════════
+//  APPLY / CLEAR ZONE
+// ══════════════════════════════════════════════════════════════
+function applyZone(place, zoneNum, source) {
+  const el = document.getElementById("bk-zone");
+  el.value = zoneNum;
+  const c = ZONE_COLORS[zoneNum] || ZONE_COLORS[5];
+  el.style.background = c.bg;
+  el.style.color = c.color;
+  showZoneBadge(zoneNum, ZONE_LABELS[zoneNum] || "ROI", source || "");
 }
 function clearZone() {
-    const el = document.getElementById("bk-zone");
-    el.value = "";
-    el.dataset.place = "";
-    el.style.background = "#f0f4ff";
-    el.style.color = "#1a3a6b";
+  const el = document.getElementById("bk-zone");
+  el.value = "";
+  el.style.background = "#f0f4ff";
+  el.style.color = "#1a3a6b";
+  clearZoneBadge();
+  lastRateRow = null;
 }
 
-async function resolveDestination(dest) {
-    const code   = getVal("bk-code");
-    const destUp = dest.trim().toUpperCase();
-    if (!destUp) { clearZone(); clearAmounts(); return; }
-    const cacheKey = code + "|" + destUp;
-    if (destCache[cacheKey]) {
-        const cached = destCache[cacheKey];
-        applyZone(cached.place, cached.zone);
-        document.getElementById("rate-info").innerHTML = `🔍 Matched: <strong>${cached.place}</strong> (Zone ${cached.zone}) from cache`;
-        calcRate();
-        return;
+// ══════════════════════════════════════════════════════════════
+//  WEIGHT → SLAB → RATE
+// ══════════════════════════════════════════════════════════════
+const SLABS = [
+  { max:0.25,     key:"rate_250g",      label:"≤250 g"    },
+  { max:0.50,     key:"rate_500g",      label:"≤500 g"    },
+  { max:1.00,     key:"rate_500g_1",    label:"≤1 kg"     },
+  { max:3.00,     key:"rate_1_to_3kg",  label:"1–3 kg/kg" },
+  { max:10.00,    key:"rate_3_to_10kg", label:"3–10 kg/kg"},
+  { max:Infinity, key:"rate_above_10kg",label:">10 kg/kg" },
+];
+
+function computeAmount(rateRow, weight) {
+  if (!rateRow || !weight) return null;
+  const w = parseFloat(weight);
+  if (isNaN(w) || w <= 0) return null;
+  for (const s of SLABS) {
+    if (w <= s.max) {
+      const rate = parseFloat(rateRow[s.key] || 0);
+      // per-kg slabs (>1 kg): multiply
+      const amount = s.max > 1 ? +(rate * w).toFixed(2) : rate;
+      return { amount, slab: s.label, rate };
     }
-    try {
-        const res  = await fetch(`/api/dest/zone-lookup?dest=${encodeURIComponent(destUp)}&code=${encodeURIComponent(code)}`);
-        const data = await res.json();
-        if (data && data.place) {
-            destCache[cacheKey] = data;
-            applyZone(data.place, data.zone);
-            document.getElementById("rate-info").innerHTML = `🔍 Matched: <strong>${data.place}</strong> (Zone ${data.zone})`;
-            calcRate();
-        } else {
-            clearZone(); clearAmounts();
-            document.getElementById("rate-info").innerHTML = `<span style="color:#dc3545">⚠ Destination not found</span>`;
-        }
-    } catch(e) { console.error(e); }
+  }
+  return null;
 }
 
-function onDestInput(val) { clearZone(); clearAmounts(); document.getElementById("rate-info").textContent = ""; }
-function scheduleDestResolve(val) { clearTimeout(destTimer); destTimer = setTimeout(() => resolveDestination(val), 200); }
-function onDestBlur(val)  { scheduleDestResolve(val); }
-function onDestKeydown(e) { if (e.key === "Enter" || e.key === "Tab") scheduleDestResolve(e.target.value); }
+// ══════════════════════════════════════════════════════════════
+//  RATE LOOKUP  (from DB for code + zone)
+// ══════════════════════════════════════════════════════════════
+async function fetchRate(code, zone) {
+  if (!code || !zone) return;
+  try {
+    const r = await fetch(
+      `/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${encodeURIComponent(zone)}`
+    ).then(x => x.json());
+    lastRateRow = (r && r.id) ? r : null;
+  } catch(e) { lastRateRow = null; }
+  applyWeightRate();
+}
 
-async function calcRate() {
-    const code   = getVal("bk-code");
-    const zoneEl = document.getElementById("bk-zone");
-    const zone   = (zoneEl.dataset.place || "").trim().toUpperCase();
-    const weight = parseFloat(document.getElementById("bk-weight").value) || 0;
-    if (!code || !zone || !weight) { clearAmounts(); return; }
-    let r;
-    try {
-        r = await fetch(`/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${encodeURIComponent(zone)}`).then(x => x.json());
-    } catch(e) { return; }
-    if (!r || !r.id) {
-        document.getElementById("rate-info").innerHTML = `<span style="color:#dc3545">⚠ No rate found</span>`;
-        clearAmounts(); return;
+function applyWeightRate() {
+  const weight = document.getElementById("bk-weight").value;
+  const zone   = document.getElementById("bk-zone").value;
+  const code   = getVal("bk-code");
+  const info   = document.getElementById("rate-info");
+
+  if (!lastRateRow) {
+    if (code && zone) {
+      info.innerHTML = `<span style="color:#dc3545">⚠ No rate found for code <strong>${code}</strong> zone <strong>${zone}</strong></span>`;
     }
-    const r250   = parseFloat(r.rate_250g) || 0, r500   = parseFloat(r.rate_500g) || 0;
-    const r500_1 = parseFloat(r.rate_500g_1) || 0, r1to3  = parseFloat(r.rate_1_to_3kg) || 0;
-    const r3to10 = parseFloat(r.rate_3_to_10kg) || 0, r10p   = parseFloat(r.rate_above_10kg) || 0;
-    let baseRate = 0, slab = "";
-    if      (weight <= 0.25) { baseRate = r250;   slab = "≤250g";  }
-    else if (weight <= 0.5)  { baseRate = r500;   slab = "≤500g";  }
-    else if (weight <= 1)    { baseRate = r500_1; slab = "≤1kg";   }
-    else if (weight <= 3)    { baseRate = r1to3  * weight; slab = "1–3kg";  }
-    else if (weight <= 10)   { baseRate = r3to10 * weight; slab = "3–10kg"; }
-    else                     { baseRate = r10p   * weight; slab = ">10kg";  }
-    const fuelPct = parseFloat(r.fuel) || 0;
-    const fuelAmt = fuelPct > 0 ? baseRate * fuelPct / 100 : 0;
-    const total   = baseRate + fuelAmt;
-    document.getElementById("bk-auto").value  = baseRate.toFixed(2);
-    document.getElementById("bk-fuel").value  = fuelAmt.toFixed(2);
-    document.getElementById("bk-total").value = total.toFixed(2);
-    document.getElementById("rate-info").innerHTML = `✓ <strong>${code}</strong> → <strong>${zone}</strong> | Slab: ${slab} | Rate: ₹${baseRate.toFixed(2)} | Fuel: ₹${fuelAmt.toFixed(2)} | <strong>Total: ₹${total.toFixed(2)}</strong>`;
-    if (!document.getElementById("bk-client").value.trim() && r.code_fullform)
-        document.getElementById("bk-client").value = r.code_fullform;
+    clearAmounts();
+    return;
+  }
+  if (!weight || parseFloat(weight) <= 0) { clearAmounts(); return; }
+
+  const result = computeAmount(lastRateRow, weight);
+  if (!result) { clearAmounts(); return; }
+
+  document.getElementById("bk-auto").value  = result.amount.toFixed(2);
+  document.getElementById("bk-total").value = result.amount.toFixed(2);
+
+  // Build slab table for info bar
+  const slabRows = SLABS.map(s => {
+    const rv = parseFloat(lastRateRow[s.key] || 0);
+    const active = s.label === result.slab;
+    return `<span style="margin-right:10px;${active
+      ? "font-weight:700;color:#198754;text-decoration:underline;" : "color:#6c757d"}">
+      ${s.label}: ₹${rv.toFixed(2)}</span>`;
+  }).join("");
+
+  info.innerHTML = `
+    ✓ <strong>${code}</strong> → Zone ${zone} (${ZONE_LABELS[zone] || ""}) |
+    Slab: <strong style="color:#0d6efd">${result.slab}</strong> |
+    Rate: ₹${result.rate.toFixed(2)} |
+    <strong style="color:#198754">Total: ₹${result.amount.toFixed(2)}</strong>
+    <br><span style="font-size:11px;">${slabRows}</span>`;
+
+  // flash
+  const autoEl = document.getElementById("bk-auto");
+  autoEl.classList.remove("rate-flash");
+  void autoEl.offsetWidth;
+  autoEl.classList.add("rate-flash");
 }
+
 function clearAmounts() {
-    ["bk-auto","bk-fuel","bk-total"].forEach(id => document.getElementById(id).value = "");
+  ["bk-auto","bk-total"].forEach(id => document.getElementById(id).value = "");
 }
-document.getElementById("bk-weight").addEventListener("change", calcRate);
 
-// ------------------------------
-// AWB DUPLICATE CHECK (unchanged)
-// ------------------------------
+function onWeightInput() {
+  applyWeightRate();
+}
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("bk-weight").addEventListener("change", applyWeightRate);
+});
+
+// ══════════════════════════════════════════════════════════════
+//  DESTINATION RESOLUTION  (main smart flow)
+// ══════════════════════════════════════════════════════════════
+async function resolveDestination(dest) {
+  const code   = getVal("bk-code");
+  const destUp = dest.trim().toUpperCase();
+  const info   = document.getElementById("rate-info");
+  if (!destUp) { clearZone(); clearAmounts(); return; }
+
+  const cacheKey = code + "|" + destUp;
+
+  // 1. Memory cache
+  if (destCache[cacheKey]) {
+    const c = destCache[cacheKey];
+    applyZone(c.place, c.zone, c.source);
+    info.innerHTML = `🔍 Matched: <strong>${c.place}</strong> (Zone ${c.zone} – ${ZONE_LABELS[c.zone]||""}) <span style="color:#6c757d">[cache]</span>`;
+    await fetchRate(code, c.zone);
+    return;
+  }
+
+  // 2. DB lookup (place_zones + rates table)
+  try {
+    const res  = await fetch(`/api/dest/zone-lookup?dest=${encodeURIComponent(destUp)}&code=${encodeURIComponent(code)}`);
+    const data = await res.json();
+    if (data && data.place) {
+      const entry = { place: data.place, zone: data.zone, source: "rate_exact" };
+      destCache[cacheKey] = entry;
+      applyZone(data.place, data.zone, "rate_exact");
+      info.innerHTML = `📋 Matched: <strong>${data.place}</strong> (Zone ${data.zone} – ${ZONE_LABELS[data.zone]||""})`;
+      await fetchRate(code, data.zone);
+      return;
+    }
+  } catch(e) { console.error("DB zone lookup error:", e); }
+
+  // 3. Client-side keyword detection
+  const kwMatch = detectZoneByKeyword(destUp);
+  if (kwMatch) {
+    const entry = { place: destUp, zone: kwMatch.zone, source: "keyword" };
+    destCache[cacheKey] = entry;
+    applyZone(destUp, kwMatch.zone, "keyword");
+    info.innerHTML = `🔍 Auto-detected: <strong>${destUp}</strong> → Zone ${kwMatch.zone} – ${kwMatch.label}`;
+    await fetchRate(code, kwMatch.zone);
+    return;
+  }
+
+  // 4. Unknown → show popup
+  clearZone();
+  clearAmounts();
+  info.innerHTML = `<span style="color:#dc3545">⚠ Destination not found – please select zone below</span>`;
+  showZoneOverlay(destUp);
+}
+
+// Destination input events
+function onDestInput(val) {
+  clearZone(); clearAmounts();
+  document.getElementById("rate-info").textContent = "";
+}
+function onDestBlur(val)  {
+  clearTimeout(destTimer);
+  destTimer = setTimeout(() => resolveDestination(val), 180);
+}
+function onDestKeydown(e) {
+  if (e.key === "Enter" || e.key === "Tab") {
+    clearTimeout(destTimer);
+    resolveDestination(e.target.value);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ZONE OVERLAY (unknown destination popup)
+// ══════════════════════════════════════════════════════════════
+function showZoneOverlay(dest) {
+  pendingDest = dest;
+  document.getElementById("zone-dest-label").textContent = dest;
+  document.getElementById("zone-place-code").value = "";
+  const ov = document.getElementById("zone-overlay");
+  ov.style.display = "flex";
+}
+function hideZoneOverlay() {
+  document.getElementById("zone-overlay").style.display = "none";
+  pendingDest = null;
+}
+async function confirmZone(zone) {
+  const dest      = pendingDest;
+  const placeCode = document.getElementById("zone-place-code").value.trim().toUpperCase();
+  if (!dest) { hideZoneOverlay(); return; }
+  hideZoneOverlay();
+  try {
+    await fetch("/api/place/save-zone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ place: dest, zone, place_code: placeCode || null })
+    });
+    // Invalidate cache and re-resolve
+    const code = getVal("bk-code");
+    delete destCache[code + "|" + dest];
+    // Apply immediately (don't wait for DB re-read)
+    applyZone(dest, zone, "saved");
+    document.getElementById("rate-info").innerHTML =
+      `💾 Saved: <strong>${dest}</strong> → Zone ${zone} – ${ZONE_LABELS[zone]||"ROI"}`;
+    await fetchRate(code, zone);
+  } catch(e) {
+    console.error("Save zone error:", e);
+    document.getElementById("rate-info").innerHTML =
+      `<span style="color:#dc3545">⚠ Failed to save zone mapping. Please try again.</span>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TABLE LOAD (AJAX)
+// ══════════════════════════════════════════════════════════════
+async function loadTable(view) {
+  const tbody      = document.getElementById('booking-table-body');
+  const loadingDiv = document.getElementById('table-loading');
+  loadingDiv.style.display = 'block';
+  tbody.innerHTML = '<tr><td colspan="14" class="text-center">Loading...</td></tr>';
+  // Clear search on table reload
+  document.getElementById('searchInput').value = '';
+  document.getElementById('search-count').textContent = '';
+  document.getElementById('btn-clear-search').style.display = 'none';
+  try {
+    const url  = view === 'all' ? '/api/bookings?limit=all' : '/api/bookings?limit=10';
+    const rows = await fetch(url).then(r => r.json());
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="14" class="text-center">No Records</td></tr>';
+      document.getElementById('search-count').textContent = 'Showing 0 – 0 of 0 entries';
+      return;
+    }
+    tbody.innerHTML = rows.map((b, i) => `
+      <tr id="brow-${b.id}">
+        <td>${i+1}</td>
+        <td><strong>${esc(b.code)}</strong></td>
+        <td>${esc(b.booking_date)}</td>
+        <td>${esc(b.awb_no)}</td>
+        <td>${esc(b.destination)}</td>
+        <td>${b.weight}</td>
+        <td>${esc(b.courier)}</td>
+        <td>${esc(b.zone)}</td>
+        <td>${b.auto_amount}</td>
+        <td><strong>${b.total_amount}</strong></td>
+        <td>${esc(b.client_name)}</td>
+        <td>${esc(b.inv_no)}</td>
+        <td>${esc(b.inv_date)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-warning btn-act btn-sm" onclick='bkEdit(${JSON.stringify(b)})'>
+            <i class="fa fa-pen"></i></button>
+          <button class="btn btn-info btn-act btn-sm text-white" onclick='bkCopy(${JSON.stringify(b)})'>
+            <i class="fa fa-copy"></i></button>
+          <button class="btn btn-danger btn-act btn-sm" onclick="deleteBooking(${b.id})">
+            <i class="fa fa-trash"></i></button>
+        </td>
+      </tr>`).join("");
+    filterTable();
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="14" class="text-center text-danger">Failed to load</td></tr>';
+  } finally {
+    loadingDiv.style.display = 'none';
+  }
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/[&<>"']/g, m =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DELETE
+// ══════════════════════════════════════════════════════════════
+async function deleteBooking(id) {
+  if (!confirm('Delete this booking?')) return;
+  const fd = new FormData();
+  fd.append('_action','delete');
+  fd.append('del_id', id);
+  await fetch('/booking-entry', { method:'POST', body:fd });
+  await loadTable(currentView);
+  bkCancel();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  FORM SUBMIT (ADD / EDIT) via AJAX
+// ══════════════════════════════════════════════════════════════
+document.getElementById('bk-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd   = new FormData(e.target);
+  const resp = await fetch('/booking-entry', { method:'POST', body:fd });
+  if (!resp.ok) { alert('Server error – could not save.'); return; }
+  await loadTable(currentView);
+  bkCancel();
+  const info = document.getElementById('rate-info');
+  info.style.color = '#198754';
+  info.innerHTML = '✓ Saved successfully.';
+  setTimeout(() => { if (info.innerHTML.includes('Saved')) info.innerHTML = ''; }, 2500);
+});
+
+// ══════════════════════════════════════════════════════════════
+//  VIEW SWITCH
+// ══════════════════════════════════════════════════════════════
+document.getElementById('btn-show-recent').addEventListener('click', () => {
+  currentView = 'recent'; loadTable('recent');
+});
+document.getElementById('btn-show-all').addEventListener('click', () => {
+  if (confirm('Showing all records may be slow. Continue?')) {
+    currentView = 'all'; loadTable('all');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  EDIT / COPY / CANCEL
+// ══════════════════════════════════════════════════════════════
+function bkEdit(b) {
+  clearAwbWarning();
+  document.getElementById("bk-action").value  = "edit";
+  document.getElementById("bk-edit-id").value = b.id;
+  document.getElementById("bk-code").value    = b.code       || "";
+  document.getElementById("bk-date").value    = b.booking_date || "";
+  document.getElementById("bk-awb").value     = b.awb_no     || "";
+  document.getElementById("bk-dest").value    = b.destination || "";
+  document.getElementById("bk-weight").value  = b.weight     || "";
+  document.getElementById("bk-courier").value = b.courier    || "";
+  document.getElementById("bk-auto").value    = b.auto_amount || "";
+  document.getElementById("bk-total").value   = b.total_amount || "";
+  document.getElementById("bk-client").value  = b.client_name || "";
+  document.getElementById("bk-invno").value   = b.inv_no     || "";
+  document.getElementById("bk-invdate").value = b.inv_date   || "";
+  document.getElementById("bk-save-lbl").textContent     = "Update";
+  document.getElementById("bk-cancel-btn").style.display = "inline-block";
+  document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
+  const row = document.getElementById("brow-" + b.id);
+  if (row) row.classList.add("editing-row");
+  window.scrollTo({ top:0, behavior:"smooth" });
+  document.getElementById("rate-info").textContent = "";
+  if (b.destination) resolveDestination(b.destination);
+}
+function bkCopy(b) {
+  bkEdit(b);
+  document.getElementById("bk-action").value  = "add";
+  document.getElementById("bk-edit-id").value = "";
+  document.getElementById("bk-awb").value     = "";
+  document.getElementById("bk-invno").value   = "";
+  document.getElementById("bk-save-lbl").textContent = "Save";
+}
+function bkCancel() {
+  clearAwbWarning();
+  document.getElementById("bk-action").value  = "add";
+  document.getElementById("bk-edit-id").value = "";
+  ["bk-code","bk-awb","bk-dest","bk-courier","bk-client","bk-invno","bk-invdate"]
+    .forEach(id => document.getElementById(id).value = "");
+  ["bk-weight","bk-auto","bk-total"]
+    .forEach(id => document.getElementById(id).value = "");
+  document.getElementById("bk-date").value = new Date().toISOString().split("T")[0];
+  clearZone();
+  document.getElementById("bk-save-lbl").textContent     = "Save";
+  document.getElementById("bk-cancel-btn").style.display = "none";
+  document.getElementById("rate-info").textContent        = "";
+  document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
+  pendingDest = null;
+  lastRateRow = null;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AWB DUPLICATE CHECK
+// ══════════════════════════════════════════════════════════════
 let awbDuplicate = false, awbCheckTimer = null;
-const awbInput = document.getElementById("bk-awb");
-const awbWarn = document.getElementById("awb-warn");
+const awbInput   = document.getElementById("bk-awb");
+const awbWarn    = document.getElementById("awb-warn");
 const awbWarnTxt = document.getElementById("awb-warn-text");
+
 function clearAwbWarning() {
-    awbDuplicate = false;
-    awbInput.style.borderColor = awbInput.style.backgroundColor = awbInput.style.color = awbInput.style.fontWeight = "";
-    awbWarn.style.display = "none";
-    awbWarnTxt.textContent = "";
+  awbDuplicate = false;
+  awbInput.style.cssText = "";
+  awbWarn.style.display  = "none";
+  awbWarnTxt.textContent = "";
 }
 function showAwbWarning(msg) {
-    awbDuplicate = true;
-    awbInput.style.borderColor = "#dc3545";
-    awbInput.style.backgroundColor = "#fff0f0";
-    awbInput.style.color = "#dc3545";
-    awbInput.style.fontWeight = "bold";
-    awbWarnTxt.textContent = msg;
-    awbWarn.style.display = "block";
-    awbInput.focus();
+  awbDuplicate = true;
+  awbInput.style.borderColor = "#dc3545";
+  awbInput.style.background  = "#fff0f0";
+  awbInput.style.color       = "#dc3545";
+  awbInput.style.fontWeight  = "bold";
+  awbWarnTxt.textContent     = msg;
+  awbWarn.style.display      = "block";
 }
 awbInput.addEventListener("input", () => {
-    clearAwbWarning();
-    clearTimeout(awbCheckTimer);
-    const val = awbInput.value.trim();
-    if (!val) return;
-    awbCheckTimer = setTimeout(async () => {
-        const editId = document.getElementById("bk-edit-id").value;
-        const data = await fetch(`/api/ac/awb_check?awb=${encodeURIComponent(val)}&edit_id=${editId}`).then(r => r.json()).catch(() => ({exists:false}));
-        if (data.exists) showAwbWarning(`Duplicate! AWB "${val}" already exists for ${data.code || ''} on ${data.date || ''} → ${data.dest || ''}`);
-    }, 350);
+  clearAwbWarning();
+  clearTimeout(awbCheckTimer);
+  const val = awbInput.value.trim();
+  if (!val) return;
+  awbCheckTimer = setTimeout(async () => {
+    const editId = document.getElementById("bk-edit-id").value;
+    const data   = await fetch(
+      `/api/ac/awb_check?awb=${encodeURIComponent(val)}&edit_id=${editId}`
+    ).then(r => r.json()).catch(() => ({ exists:false }));
+    if (data.exists)
+      showAwbWarning(`Duplicate! AWB "${val}" already used for ${data.code||''} on ${data.date||''} → ${data.dest||''}`);
+  }, 350);
 });
-awbInput.addEventListener("keydown", e => { if (awbDuplicate && (e.key === "Tab" || e.key === "Enter")) { e.preventDefault(); e.stopImmediatePropagation(); awbInput.focus(); } });
+awbInput.addEventListener("keydown", e => {
+  if (awbDuplicate && (e.key==="Tab"||e.key==="Enter")) {
+    e.preventDefault(); e.stopImmediatePropagation(); awbInput.focus();
+  }
+});
 
-// ------------------------------
-// AUTOCOMPLETE (unchanged)
-// ------------------------------
-function setupAC(inputId, url, onSelect, labelFn, subFn) {
-    const input = document.getElementById(inputId);
-    let drop = document.getElementById(inputId + "-drop");
-    if (!drop) { drop = document.createElement("div"); drop.className = "ac-drop"; drop.id = inputId + "-drop"; input.parentNode.appendChild(drop); }
-    let timer, hi = -1;
-    function closeMe() { drop.classList.remove("open"); hi = -1; }
-    function render(items) {
-        if (!items.length) { closeMe(); return; }
-        drop.innerHTML = "";
-        hi = 0;
-        items.forEach((item, i) => {
-            const div = document.createElement("div");
-            div.className = "ac-item" + (i === 0 ? " hi" : "");
-            const lbl = labelFn ? labelFn(item) : String(item);
-            const sub = subFn  ? subFn(item)   : "";
-            div.innerHTML = `<strong>${escapeHtml(lbl)}</strong>` + (sub ? `<div class="ac-sub">${escapeHtml(sub)}</div>` : "");
-            div.addEventListener("mousedown", e => { e.preventDefault(); pick(item); });
-            drop.appendChild(div);
-        });
-        drop.classList.add("open");
-        document.querySelectorAll(".ac-drop.open").forEach(d => { if (d !== drop) d.classList.remove("open"); });
+// ══════════════════════════════════════════════════════════════
+//  SEARCH  (with button + count display)
+// ══════════════════════════════════════════════════════════════
+function filterTable() {
+  const q       = document.getElementById('searchInput').value.toLowerCase().trim();
+  const rows    = Array.from(document.getElementById('booking-table-body').getElementsByTagName('tr'));
+  const clearBtn = document.getElementById('btn-clear-search');
+  let shown = 0, total = 0;
+
+  // Remove old no-results row if present
+  const oldInfo = document.getElementById('search-info-row');
+  if (oldInfo) oldInfo.remove();
+
+  for (const row of rows) {
+    // Skip colspan helper rows (loading / no-records)
+    if (row.cells.length === 1 && row.cells[0].colSpan > 1) continue;
+    total++;
+    let text = '';
+    for (let i = 0; i < row.cells.length - 1; i++) {
+      text += row.cells[i].innerText.toLowerCase() + ' ';
     }
-    function pick(item) { onSelect(item); closeMe(); }
-    function moveHi(delta) { const els = drop.querySelectorAll(".ac-item"); if (!els.length) return; if (hi >= 0) els[hi]?.classList.remove("hi"); hi = Math.max(0, Math.min(els.length - 1, (hi < 0 ? 0 : hi) + delta)); els[hi]?.classList.add("hi"); els[hi]?.scrollIntoView({ block: "nearest" }); }
-    input.addEventListener("input", () => {
-        clearTimeout(timer);
-        const q = input.value.trim();
-        if (!q) { closeMe(); return; }
-        timer = setTimeout(async () => { const data = await fetch(url + encodeURIComponent(q)).then(r => r.json()).catch(() => []); render(data); }, 80);
-    });
-    input.addEventListener("keydown", e => {
-        if (!drop.classList.contains("open")) return;
-        if      (e.key === "ArrowDown") { e.preventDefault(); moveHi(1); }
-        else if (e.key === "ArrowUp")   { e.preventDefault(); moveHi(-1); }
-        else if (e.key === "Enter")     { const h = drop.querySelector(".ac-item.hi"); if (h) { e.preventDefault(); e.stopImmediatePropagation(); h.dispatchEvent(new MouseEvent("mousedown")); } }
-        else if (e.key === "Escape")    closeMe();
-    });
-    input.addEventListener("blur", () => setTimeout(closeMe, 160));
+    const show = !q || text.includes(q);
+    row.style.display = show ? '' : 'none';
+    if (show) shown++;
+  }
+
+  // Update entry count label
+  const countEl = document.getElementById('search-count');
+  if (total > 0) {
+    const label = q
+      ? `Showing ${shown} – ${shown} of ${total} entries <span style="color:#0d6efd;">(filtered by "<strong>${esc(q)}</strong>")</span>`
+      : `Showing 1 – ${shown} of ${total} entries`;
+    countEl.innerHTML = label;
+  } else {
+    countEl.textContent = '';
+  }
+
+  // Show/hide clear button
+  clearBtn.style.display = q ? 'inline-block' : 'none';
+
+  // No results row
+  if (shown === 0 && q) {
+    const tbody  = document.getElementById('booking-table-body');
+    const infoRow = tbody.insertRow();
+    infoRow.id = 'search-info-row';
+    const cell = infoRow.insertCell(0);
+    cell.colSpan = 14;
+    cell.className = 'text-center text-muted py-3';
+    cell.innerHTML = `<i class="fa fa-search"></i> No records found matching "<strong>${esc(q)}</strong>"`;
+  }
 }
-document.addEventListener("click", e => { if (!e.target.closest(".ac-wrap")) document.querySelectorAll(".ac-drop.open").forEach(d => d.classList.remove("open")); });
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('btn-clear-search').style.display = 'none';
+  filterTable();
+}
+
+// Trigger search on Enter key
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') filterTable();
+  });
+  // Also support live-as-you-type (optional — remove if you only want button click)
+  document.getElementById('searchInput').addEventListener('input', filterTable);
+});
+
+// ══════════════════════════════════════════════════════════════
+//  AUTOCOMPLETE
+// ══════════════════════════════════════════════════════════════
+function setupAC(inputId, url, onSelect, labelFn, subFn) {
+  const input = document.getElementById(inputId);
+  let drop    = document.getElementById(inputId+"-drop");
+  if (!drop) {
+    drop = document.createElement("div");
+    drop.className = "ac-drop"; drop.id = inputId+"-drop";
+    input.parentNode.appendChild(drop);
+  }
+  let timer, hi = -1;
+  const closeMe = () => { drop.classList.remove("open"); hi = -1; };
+  function render(items) {
+    if (!items.length) { closeMe(); return; }
+    drop.innerHTML = ""; hi = 0;
+    items.forEach((item, i) => {
+      const div = document.createElement("div");
+      div.className = "ac-item" + (i===0?" hi":"");
+      const lbl = labelFn ? labelFn(item) : String(item);
+      const sub = subFn  ? subFn(item)   : "";
+      div.innerHTML = `<strong>${esc(lbl)}</strong>` +
+        (sub ? `<div class="ac-sub">${esc(sub)}</div>` : "");
+      div.addEventListener("mousedown", e => { e.preventDefault(); pick(item); });
+      drop.appendChild(div);
+    });
+    drop.classList.add("open");
+    document.querySelectorAll(".ac-drop.open").forEach(d => { if (d!==drop) d.classList.remove("open"); });
+  }
+  const pick = item => { onSelect(item); closeMe(); };
+  const moveHi = delta => {
+    const els = drop.querySelectorAll(".ac-item");
+    if (!els.length) return;
+    if (hi>=0) els[hi]?.classList.remove("hi");
+    hi = Math.max(0, Math.min(els.length-1, (hi<0?0:hi)+delta));
+    els[hi]?.classList.add("hi");
+    els[hi]?.scrollIntoView({ block:"nearest" });
+  };
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { closeMe(); return; }
+    timer = setTimeout(async () => {
+      const data = await fetch(url+encodeURIComponent(q)).then(r=>r.json()).catch(()=>[]);
+      render(data);
+    }, 80);
+  });
+  input.addEventListener("keydown", e => {
+    if (!drop.classList.contains("open")) return;
+    if      (e.key==="ArrowDown") { e.preventDefault(); moveHi(1);  }
+    else if (e.key==="ArrowUp")   { e.preventDefault(); moveHi(-1); }
+    else if (e.key==="Enter")     {
+      const h = drop.querySelector(".ac-item.hi");
+      if (h) { e.preventDefault(); e.stopImmediatePropagation(); h.dispatchEvent(new MouseEvent("mousedown")); }
+    }
+    else if (e.key==="Escape") closeMe();
+  });
+  input.addEventListener("blur", () => setTimeout(closeMe, 160));
+}
+document.addEventListener("click", e => {
+  if (!e.target.closest(".ac-wrap"))
+    document.querySelectorAll(".ac-drop.open").forEach(d => d.classList.remove("open"));
+});
+
 function onCodeSelect(item) {
-    setVal("bk-code", item.code);
-    if (item.code_fullform) document.getElementById("bk-client").value = item.code_fullform;
-    const dest = document.getElementById("bk-dest").value.trim();
-    if (dest) resolveDestination(dest);
-    else calcRate();
+  setVal("bk-code", item.code);
+  if (item.code_fullform) document.getElementById("bk-client").value = item.code_fullform;
+  const dest = document.getElementById("bk-dest").value.trim();
+  if (dest) resolveDestination(dest);
 }
 function onDestACSelect(v) { setVal("bk-dest", v); resolveDestination(v); }
 
-// ------------------------------
-// INITIALISE
-// ------------------------------
+// ══════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════
 document.addEventListener("DOMContentLoaded", () => {
-    const d = document.getElementById("bk-date");
-    if (!d.value) d.value = new Date().toISOString().split("T")[0];
-    loadTable('recent');
-    setupAC("bk-code",   "/api/ac/code?q=",        onCodeSelect, i => i.code, i => i.code_fullform);
-    setupAC("bk-dest",   "/api/ac/destination?q=", onDestACSelect);
-    setupAC("bk-client", "/api/ac/client?q=",      v => setVal("bk-client", v));
+  const d = document.getElementById("bk-date");
+  if (!d.value) d.value = new Date().toISOString().split("T")[0];
+  loadTable('recent');
+  setupAC("bk-code",   "/api/ac/code?q=",        onCodeSelect,    i => i.code, i => i.code_fullform);
+  setupAC("bk-dest",   "/api/ac/destination?q=", onDestACSelect);
+  setupAC("bk-client", "/api/ac/client?q=",      v => setVal("bk-client", v));
 });
 </script>
 
 <style>
-@keyframes awbShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
-.ac-drop { display:none; position:absolute; z-index:1000; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; width:100%; }
+/* ── Autocomplete ── */
+.ac-drop { display:none; position:absolute; z-index:1000; background:#fff;
+           border:1px solid #ccc; max-height:200px; overflow-y:auto; width:100%; }
 .ac-drop.open { display:block; }
 .ac-item { padding:6px 10px; cursor:pointer; border-bottom:1px solid #eee; }
 .ac-item.hi { background:#e0e8ff; }
-.ac-sub { font-size:11px; color:#6c757d; }
+.ac-sub  { font-size:11px; color:#6c757d; }
 .ac-wrap { position:relative; }
+
+/* ── Rate flash animation ── */
+@keyframes rateFlash {
+  0%   { background:#bbf7d0; box-shadow:0 0 0 3px #34d399; }
+  100% { background:transparent; box-shadow:none; }
+}
+.rate-flash { animation: rateFlash .7s ease; }
+
+/* ── Zone popup animation ── */
+@keyframes popIn {
+  from { opacity:0; transform:scale(.9) translateY(-10px); }
+  to   { opacity:1; transform:scale(1)  translateY(0); }
+}
+
+/* ── Zone buttons in popup ── */
+.zone-btn {
+  width:100%; padding:11px 14px; border:none; border-radius:8px;
+  cursor:pointer; color:#fff; font-weight:600; font-size:.88rem;
+  text-align:left; display:flex; align-items:center; gap:10px;
+  transition:filter .15s, transform .1s;
+}
+.zone-btn:hover  { filter:brightness(1.12); transform:translateX(3px); }
+.zone-btn:active { transform:scale(.98); }
+.zbadge {
+  display:inline-flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,.25); border-radius:50%;
+  width:24px; height:24px; font-size:11px; font-weight:800; flex-shrink:0;
+}
+
+/* ── AWB shake ── */
+@keyframes awbShake {
+  0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
+  40%{transform:translateX(6px)}   60%{transform:translateX(-4px)}
+  80%{transform:translateX(4px)}
+}
+
+/* ── Editing row highlight ── */
+.editing-row { background:#fff8dc !important; outline:2px solid #ffc107; }
+
+/* ── Search count style ── */
+#search-count {
+  font-size: 13px;
+  color: #555;
+  padding: 2px 0;
+  min-height: 20px;
+}
 </style>
 {% endblock %}
