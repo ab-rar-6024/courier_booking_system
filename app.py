@@ -1090,12 +1090,17 @@ def api_ac_client():
 @app.route("/api/rate/lookup")
 def api_rate_lookup():
     code = request.args.get("code", "").strip().upper()
-    zone = request.args.get("zone", "").strip().upper()
-    if not code or not zone: return jsonify({})
+    zone_str = request.args.get("zone", "").strip()
+    if not code or not zone_str:
+        return jsonify({})
+    try:
+        zone = int(zone_str)
+    except ValueError:
+        return jsonify({})
     db = get_db_connection()
     cur = db.cursor()
     cur.execute(
-        "SELECT * FROM rates WHERE UPPER(code)=%s AND UPPER(place)=%s LIMIT 1",
+        "SELECT * FROM rates WHERE UPPER(code)=%s AND zone = %s LIMIT 1",
         (code, zone))
     row = cur.fetchone()
     db.close()
