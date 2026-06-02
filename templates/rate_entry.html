@@ -127,6 +127,10 @@
         <label class="small fw-semibold">ABV 10KG/KG</label>
         <input name="rate_above_10kg" id="r-10kg" type="number" step="0.01" class="form-control" value="">
     </div>
+    <div class="col-md-1">
+        <label class="small fw-semibold">FSC %</label>
+        <input name="fuel" id="r-fuel" type="number" step="0.01" class="form-control" placeholder="e.g. 12">
+    </div>
 
     <div class="col-md-2 d-flex align-items-end gap-1">
         <button type="submit" class="btn btn-success flex-fill btn-submit">
@@ -148,6 +152,7 @@
     <th>#</th><th>Code</th><th>Code FullForm</th><th>Place</th><th>Zone</th>
     <th>250 GMS</th><th>500 GMS</th><th>1 KG</th>
     <th>ABV 1KG/KG</th><th>ABV 3KG/KG</th><th>ABV 10KG/KG</th>
+    <th>FSC %</th>
     <th>Action</th>
 </tr>
 </thead>
@@ -170,6 +175,13 @@
     <td>{{ r.rate_3_to_10kg }}</td>
     <td>{{ r.rate_above_10kg }}</td>
     <td>
+        {% if r.fuel is not none and r.fuel != '' %}
+            <span class="badge bg-info text-dark">{{ r.fuel }}%</span>
+        {% else %}
+            <span class="text-muted">—</span>
+        {% endif %}
+    </td>
+    <td>
         <button class="btn btn-warning btn-act btn-sm" onclick='rateEdit({{ r|tojson }})'><i class="fa fa-pen"></i></button>
         <button class="btn btn-info btn-act btn-sm text-white" onclick='rateCopy({{ r|tojson }})'><i class="fa fa-copy"></i></button>
         <form method="post" id="rdel-{{ r.id }}" style="display:inline">
@@ -180,7 +192,7 @@
     </td>
 </tr>
 {% else %}
-<tr><td colspan="12" class="text-center">No Records</td></tr>
+<tr><td colspan="13" class="text-center">No Records</td></tr>
 {% endfor %}
 </tbody>
 </table>
@@ -191,34 +203,27 @@
 {% block scripts %}
 <script>
 // ======================= ZONE DETECTION & PLACE AUTO-CORRECTION =======================
-// Returns { zoneNum, correctedPlace } based on the user's input.
 function getZoneAndCorrectedPlace(originalPlace) {
     if (!originalPlace) return { zoneNum: null, correctedPlace: originalPlace };
     const p = originalPlace.trim().toUpperCase();
 
-    // Zone 1 : CHENNAI (place stays "CHENNAI")
     if (p === "CHENNAI") return { zoneNum: 1, correctedPlace: "CHENNAI" };
 
-    // Zone 2 : TAMIL NADU (place stays "TAMIL NADU")
     if (p === "TAMIL NADU" || p === "TAMILNADU") return { zoneNum: 2, correctedPlace: "TAMIL NADU" };
 
-    // Zone 3 : SOUTH – any southern state OR the word "SOUTH" itself
     const southKeywords = ["KERALA", "KARNATAKA", "ANDHRA PRADESH", "ANDHRA", "TELANGANA", "SOUTH"];
     if (southKeywords.some(kw => p === kw || p.includes(kw) || kw.includes(p))) {
         return { zoneNum: 3, correctedPlace: "SOUTH" };
     }
 
-    // Zone 4 : NORTH – any north metro OR the word "NORTH" itself
     const northMetro = ["DELHI", "NEW DELHI", "MUMBAI", "KOLKATA", "CALCUTTA", "NORTH"];
     if (northMetro.some(kw => p === kw || p.includes(kw) || kw.includes(p))) {
         return { zoneNum: 4, correctedPlace: "NORTH" };
     }
 
-    // Zone 5 : REST OF INDIA (place stays as typed, but uppercase)
     return { zoneNum: 5, correctedPlace: originalPlace.trim().toUpperCase() };
 }
 
-// Apply zone to the readonly field
 function applyZone(zoneNum) {
     const zoneField = document.getElementById("r-zone");
     if (zoneNum) {
@@ -231,37 +236,29 @@ function applyZone(zoneNum) {
     }
 }
 
-// Main function: when place loses focus or is changed, we auto‑correct the place
-// and set the zone accordingly.
 function updatePlaceAndZone() {
     const placeInput = document.getElementById("r-place");
     const original = placeInput.value;
     const { zoneNum, correctedPlace } = getZoneAndCorrectedPlace(original);
-    
-    // Only change the place value if a correction was made (i.e., it's zone 3 or 4, or uppercase conversion)
     if (correctedPlace && correctedPlace !== original) {
         placeInput.value = correctedPlace;
     }
     applyZone(zoneNum);
 }
 
-// Wrapper for onblur event – this is where the auto‑correction happens
 function onPlaceBlur(val) {
     updatePlaceAndZone();
-    onCodePlaceChange(); // trigger auto‑fetch if needed
+    onCodePlaceChange();
 }
 
-// For oninput we only update zone in real‑time, but we do NOT auto‑correct
-// because that would be annoying while typing. Correction happens on blur.
 function onPlaceInput(val) {
-    // Show zone preview without changing the typed text
     const { zoneNum } = getZoneAndCorrectedPlace(val);
     applyZone(zoneNum);
 }
 
 function onPlaceKeydown(e) {
     if (e.key === "Enter") {
-        e.preventDefault(); // prevent form submit on Enter in place field
+        e.preventDefault();
         updatePlaceAndZone();
         onCodePlaceChange();
     }
@@ -271,7 +268,6 @@ function onPlaceKeydown(e) {
     }
 }
 
-// This is used when autofetch populates the place – we must correct it then too.
 function setPlaceAndZone(placeValue) {
     const placeInput = document.getElementById("r-place");
     placeInput.value = placeValue;
@@ -293,7 +289,6 @@ async function tryAutoFetch() {
     let place   = document.getElementById("r-place").value.trim().toUpperCase();
     if (!code || !place) return;
 
-    // For lookup we need the numeric zone (already computed from place)
     const zoneNum = getZoneAndCorrectedPlace(place).zoneNum;
     if (!zoneNum) return;
 
@@ -307,6 +302,7 @@ async function tryAutoFetch() {
             document.getElementById("r-1to3").value  = data.rate_1_to_3kg ?? "";
             document.getElementById("r-3to10").value = data.rate_3_to_10kg ?? "";
             document.getElementById("r-10kg").value  = data.rate_above_10kg ?? "";
+            document.getElementById("r-fuel").value  = data.fuel ?? "";
             if (data.zone) applyZone(data.zone);
             showAutoFetchBadge();
         }
@@ -326,7 +322,7 @@ function showAutoFetchBadge() {
     setTimeout(() => { badge.style.opacity = "0"; }, 2500);
 }
 
-// ======================= AUTOCOMPLETE (unchanged) =======================
+// ======================= AUTOCOMPLETE =======================
 function bindAC(input, url, onSelect, labelFn, subFn) {
     if (!input) return;
     let drop = null;
@@ -401,6 +397,7 @@ function rateEdit(r) {
     document.getElementById("r-1to3").value        = r.rate_1_to_3kg;
     document.getElementById("r-3to10").value       = r.rate_3_to_10kg;
     document.getElementById("r-10kg").value        = r.rate_above_10kg;
+    document.getElementById("r-fuel").value        = r.fuel ?? "";
     if (r.zone) applyZone(r.zone);
     else updatePlaceAndZone();
     document.getElementById("r-save-lbl").textContent     = "Update";
@@ -413,12 +410,13 @@ function rateEdit(r) {
 
 function rateCopy(r) {
     rateEdit(r);
-    document.getElementById("rate-action").value  = "add";
-    document.getElementById("rate-edit-id").value = "";
-    document.getElementById("r-place").value      = "";
-    document.getElementById("r-zone").value       = "";
+    document.getElementById("rate-action").value       = "add";
+    document.getElementById("rate-edit-id").value      = "";
+    document.getElementById("r-place").value           = "";
+    document.getElementById("r-zone").value            = "";
     document.getElementById("r-zone").style.background = "#f0f4ff";
-    document.getElementById("r-save-lbl").textContent = "Save";
+    document.getElementById("r-fuel").value            = r.fuel ?? "";
+    document.getElementById("r-save-lbl").textContent  = "Save";
     document.getElementById("r-place").focus();
 }
 
@@ -426,7 +424,7 @@ function rateCancel() {
     document.getElementById("rate-action").value      = "add";
     document.getElementById("rate-edit-id").value     = "";
     ["r-code","r-fullform","r-place"].forEach(id => document.getElementById(id).value = "");
-    ["r-250g","r-500g","r-500g1","r-1to3","r-3to10","r-10kg"]
+    ["r-250g","r-500g","r-500g1","r-1to3","r-3to10","r-10kg","r-fuel"]
         .forEach(id => document.getElementById(id).value = "");
     applyZone(null);
     document.getElementById("r-save-lbl").textContent     = "Save";

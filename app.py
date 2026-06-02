@@ -454,6 +454,186 @@ def booking_entry():
     return render_template("booking_entry.html")
 
 # ------------------------------------------------------------
+# BOOKING IMPORT - PREVIEW ONLY (no DB insert)
+# ------------------------------------------------------------
+@app.route("/booking-import", methods=["POST"])
+def booking_import():
+    from datetime import datetime
+
+    def zone_name_to_number(zone_text):
+        zone_map = {
+            'CHENNAI': 1, 'TAMIL NADU': 2, 'TAMILNADU': 2,
+            'SOUTH INDIA': 3, 'SOUTH': 3,
+            'NORTH METRO': 4, 'NORTH': 4,
+            'ROI': 5, 'REST OF INDIA': 5
+        }
+        z = str(zone_text).strip().upper()
+        for k, v in zone_map.items():
+            if z == k or (k == 'CHENNAI' and z in ['CHENNAI', 'MADRAS']):
+                return v
+        for kw, val in zone_map.items():
+            if kw in z:
+                return val
+        return 5
+
+    if 'excel_file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files['excel_file']
+    if file.filename == '':
+        return jsonify({"error": "Empty filename"}), 400
+
+    try:
+        df = pd.read_excel(file)
+    except Exception as e:
+        return jsonify({"error": f"Failed to read Excel: {str(e)}"}), 400
+
+    required_cols = ['Code', 'Date', 'AWB Number', 'Destination', 'Weight', 'Zone']
+    for col in required_cols:
+        if col not in df.columns:
+            return jsonify({"error": f"Missing column: {col}"}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor()
+
+    cursor.execute("SELECT * FROM rates")
+    all_rates = cursor.fetchall()
+    rate_cache = {}
+    for r in all_rates:
+        rate_cache[(r['code'].upper(), r['zone'])] = dict(r)
+
+    db.close()
+
+    preview_rows = []
+    errors = []
+
+    slabs = [
+        (0.25, 'rate_250g'), (0.50, 'rate_500g'), (1.00, 'rate_500g_1'),
+        (3.00, 'rate_1_to_3kg'), (10.00, 'rate_3_to_10kg'), (float('inf'), 'rate_above_10kg')
+    ]
+
+    for idx, row in df.iterrows():
+        row_num = idx + 2
+        try:
+            code = str(row['Code']).strip().upper()
+
+            # Date parsing
+            date_val = row['Date']
+            if pd.isna(date_val):
+                raise ValueError("Date is empty")
+            if hasattr(date_val, 'strftime'):
+                booking_date = date_val.date() if hasattr(date_val, 'date') else date_val
+                date_str = booking_date.isoformat()
+            else:
+                date_str = str(date_val).strip()
+                if ' ' in date_str:
+                    date_str = date_str.split(' ')[0]
+                for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y'):
+                    try:
+                        booking_date = datetime.strptime(date_str, fmt).date()
+                        date_str = booking_date.isoformat()
+                        break
+                    except:
+                        continue
+                else:
+                    raise ValueError(f"Invalid date format: {date_str}")
+
+            awb_no = str(row['AWB Number']).strip()
+            destination = str(row['Destination']).strip().upper()
+            weight = float(row['Weight'])
+            zone_text = str(row['Zone']).strip()
+            zone_num = zone_name_to_number(zone_text)
+
+            # Look up rate — missing rate is allowed, amount defaults to 0.00
+            rate_row = rate_cache.get((code, zone_num))
+
+            auto_amount = 0.0
+            if rate_row:
+                for max_w, col_name in slabs:
+                    if weight <= max_w:
+                        rate = float(rate_row.get(col_name) or 0)
+                        auto_amount = rate * weight if max_w > 1 else rate
+                        break
+            auto_amount = round(auto_amount, 2)
+
+            # Warn in errors list but still mark row as valid
+            if not rate_row:
+                errors.append(f"Row {row_num}: No rate found for code '{code}' zone {zone_num} — amount set to 0.00")
+
+            preview_rows.append({
+                "temp_id": row_num,
+                "code": code,
+                "booking_date": date_str,
+                "awb_no": awb_no,
+                "destination": destination,
+                "weight": weight,
+                "zone": zone_num,
+                "auto_amount": auto_amount,
+                "courier": str(row['Courier']).strip() if 'Courier' in df.columns and not pd.isna(row.get('Courier')) else "",
+                "valid": True
+            })
+
+        except Exception as e:
+            errors.append(f"Row {row_num}: {str(e)}")
+            preview_rows.append({
+                "temp_id": row_num,
+                "valid": False,
+                "error": str(e)
+            })
+
+    return jsonify({
+        "rows": preview_rows,
+        "errors": errors[:50]
+    })
+
+@app.route("/booking-import-save", methods=["POST"])
+def booking_import_save():
+    data = request.get_json()
+    rows = data.get("rows", [])
+    if not rows:
+        return jsonify({"success": False, "message": "No data to save"})
+
+    db = get_db_connection()
+    cursor = db.cursor()
+    inserted = 0
+    errors = []
+
+    for row in rows:
+        if not row.get("valid"):
+            errors.append(f"Row {row['temp_id']}: invalid data, skipped")
+            continue
+        try:
+            # Duplicate AWB check
+            cursor.execute("SELECT id FROM bookings WHERE awb_no = %s LIMIT 1", (row['awb_no'],))
+            if cursor.fetchone():
+                errors.append(f"Row {row['temp_id']}: AWB '{row['awb_no']}' already exists – skipped")
+                continue
+
+            cursor.execute("""
+                INSERT INTO bookings (
+                    code, booking_date, awb_no, destination, weight,
+                    courier, zone, auto_amount, fuel, total_amount,
+                    client_name, inv_no, inv_date
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                row['code'], row['booking_date'], row['awb_no'], row['destination'],
+                row['weight'], row.get('courier', ''), str(row['zone']),
+                row['auto_amount'], 0.0, row['auto_amount'],
+                '', '', None
+            ))
+            inserted += 1
+        except Exception as e:
+            errors.append(f"Row {row['temp_id']}: {str(e)}")
+
+    db.commit()
+    db.close()
+    return jsonify({
+        "success": True,
+        "inserted": inserted,
+        "errors": errors[:50]
+    })
+
+# ------------------------------------------------------------
 # API: bookings (for AJAX datatable)
 # ------------------------------------------------------------
 @app.route("/api/bookings")

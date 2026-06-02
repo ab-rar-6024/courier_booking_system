@@ -12,9 +12,23 @@
             <i class="fa fa-list"></i> Show All (slow)
         </button>
     </div>
-    <a href="/booking-export" class="btn btn-success btn-sm">
-        <i class="fa fa-file-excel"></i> Export to Excel
-    </a>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-info btn-sm" id="btn-import-excel">
+            <i class="fa fa-upload"></i> Import Excel
+        </button>
+        <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="display:none;">
+        <a href="/booking-export" class="btn btn-success btn-sm">
+            <i class="fa fa-file-excel"></i> Export to Excel
+        </a>
+    </div>
+</div>
+
+<!-- Progress area for upload -->
+<div id="importProgressArea" style="display:none; margin-bottom:10px;" class="card p-2">
+    <div class="progress mb-1" style="height:20px;">
+        <div id="importProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0%</div>
+    </div>
+    <div id="importLog" style="max-height:150px; overflow-y:auto; font-size:12px;"></div>
 </div>
 
 <!-- ENTRY / EDIT FORM -->
@@ -24,21 +38,17 @@
 <input type="hidden" name="edit_id"  id="bk-edit-id" value="">
 <input type="hidden" name="fuel"     value="0">
 <div class="row g-2">
-    <!-- 1. CODE -->
     <div class="col-md-2">
         <label>CODE</label>
         <div class="ac-wrap">
-            <input name="code" id="bk-code" class="form-control"
-                   placeholder="e.g. SBH" required autocomplete="off">
+            <input name="code" id="bk-code" class="form-control" placeholder="e.g. SBH" required autocomplete="off">
             <div class="ac-drop" id="bk-code-drop"></div>
         </div>
     </div>
-    <!-- 2. DATE -->
     <div class="col-md-2">
         <label>DATE</label>
         <input type="date" name="booking_date" id="bk-date" class="form-control" required>
     </div>
-    <!-- 3. AWB NO -->
     <div class="col-md-2">
         <label>AWB NO</label>
         <input name="awb_no" id="bk-awb" class="form-control" autocomplete="off" placeholder="AWB number">
@@ -47,7 +57,6 @@
             <span id="awb-warn-text"></span>
         </div>
     </div>
-    <!-- 4. DESTINATION -->
     <div class="col-md-3">
         <label>DESTINATION</label>
         <div class="ac-wrap">
@@ -58,21 +67,16 @@
                    onkeydown="onDestKeydown(event)">
             <div class="ac-drop" id="bk-dest-drop"></div>
         </div>
-        <!-- Zone badge appears here dynamically -->
         <div id="zone-badge-wrap" style="margin-top:4px; min-height:22px;"></div>
     </div>
-    <!-- 5. WEIGHT -->
     <div class="col-md-1">
         <label>WEIGHT</label>
-        <input type="number" step="0.001" name="weight" id="bk-weight" class="form-control"
-               placeholder="0.000" oninput="onWeightInput()">
+        <input type="number" step="0.001" name="weight" id="bk-weight" class="form-control" placeholder="0.000" oninput="onWeightInput()">
     </div>
-    <!-- 6. COURIER -->
     <div class="col-md-2">
         <label>COURIER</label>
         <input name="courier" id="bk-courier" class="form-control">
     </div>
-    <!-- 7. ZONE (auto) -->
     <div class="col-md-2">
         <label>ZONE <small class="text-muted">(auto)</small></label>
         <input name="zone" id="bk-zone" class="form-control fw-bold text-center" readonly
@@ -80,41 +84,13 @@
                style="background:#f0f4ff; border:2px solid #6c8ebf; color:#1a3a6b;
                       cursor:not-allowed; font-size:1.1rem;">
     </div>
-    <!-- 8. AMOUNT -->
     <div class="col-md-2">
         <label>Amount</label>
-        <input type="number" step="0.01" name="auto_amount" id="bk-auto"
-               class="form-control" placeholder="0.00">
+        <input type="number" step="0.01" name="auto_amount" id="bk-auto" class="form-control" placeholder="0.00">
     </div>
-    <!-- 9. TOTAL -->
-    <div class="col-md-2">
-        <label>Total</label>
-        <input type="number" step="0.01" name="total_amount" id="bk-total"
-               class="form-control" placeholder="0.00">
-    </div>
-    <!-- 10. CLIENT NAME -->
-    <div class="col-md-2">
-        <label>Client Name</label>
-        <div class="ac-wrap">
-            <input name="client_name" id="bk-client" class="form-control" autocomplete="off">
-            <div class="ac-drop" id="bk-client-drop"></div>
-        </div>
-    </div>
-    <!-- 11. INV NO -->
-    <div class="col-md-2">
-        <label>INV NO</label>
-        <input name="inv_no" id="bk-invno" class="form-control">
-    </div>
-    <!-- 12. INV DATE -->
-    <div class="col-md-2">
-        <label>INV DATE</label>
-        <input name="inv_date" id="bk-invdate" class="form-control" placeholder="dd/mm/yyyy">
-    </div>
-    <!-- Rate Info Bar -->
     <div class="col-12">
         <div id="rate-info" style="font-size:12px; min-height:18px; margin-top:2px;"></div>
     </div>
-    <!-- Save / Cancel -->
     <div class="col-md-2 d-flex align-items-end gap-1">
         <button type="submit" class="btn btn-success flex-fill btn-submit" id="bk-submit-btn">
             <i class="fa fa-save"></i> <span id="bk-save-lbl">Save</span>
@@ -126,105 +102,110 @@
 </form>
 </div>
 
+<!-- ============================================================ -->
+<!-- INLINE IMPORT PREVIEW (shown after Excel upload, below form) -->
+<!-- ============================================================ -->
+<div id="inlinePreviewSection" style="display:none;" class="card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="mb-0">
+                <i class="fa fa-eye text-primary"></i>
+                Preview Imported Data
+                <span id="previewRowCount" class="badge bg-primary ms-2" style="font-size:13px;"></span>
+            </h5>
+            <small class="text-muted">Review and edit the data below before saving.</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" id="saveAllPreviewBtn">
+                <i class="fa fa-save"></i> Save All Valid Rows
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="closeInlinePreview()">
+                <i class="fa fa-times"></i> Discard
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary bar -->
+    <div id="previewSummaryBar" class="d-flex gap-3 mb-3" style="font-size:13px;"></div>
+
+    <div id="previewError" class="alert alert-danger mb-2" style="display:none;"></div>
+
+    <div style="overflow-x:auto; max-height:420px; overflow-y:auto;">
+        <table class="table table-bordered table-sm table-hover" id="previewTable" style="font-size:13px; min-width:900px;">
+            <thead style="position:sticky; top:0; z-index:10;">
+                <tr class="table-dark">
+                    <th style="width:40px;">#</th>
+                    <th>Code</th>
+                    <th>Date</th>
+                    <th>AWB No</th>
+                    <th>Destination</th>
+                    <th>Weight</th>
+                    <th>Zone</th>
+                    <th>Amount</th>
+                    <th>Courier</th>
+                    <th style="width:60px;">Status</th>
+                </tr>
+            </thead>
+            <tbody id="previewTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-muted">
+            <i class="fa fa-info-circle"></i>
+            You can edit any field directly in the table before saving.
+            Rows highlighted in red are invalid and will be skipped.
+        </small>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" id="saveAllPreviewBtn2">
+                <i class="fa fa-save"></i> Save All Valid Rows
+            </button>
+            <button class="btn btn-outline-secondary" onclick="closeInlinePreview()">
+                <i class="fa fa-times"></i> Discard
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- SEARCH & TABLE -->
 <div class="card p-3">
-    <!-- Search bar with button -->
     <div class="mb-2 d-flex gap-2 align-items-center">
-        <input type="text" id="searchInput" class="form-control"
-               placeholder="Search by any field (AWB, destination, client, code, zone...)">
-        <button type="button" class="btn btn-primary" id="btn-search" onclick="filterTable()">
-            <i class="fa fa-search"></i> Search
-        </button>
-        <button type="button" class="btn btn-outline-secondary" id="btn-clear-search" onclick="clearSearch()" style="display:none;" title="Clear search">
-            <i class="fa fa-times"></i>
-        </button>
+        <input type="text" id="searchInput" class="form-control" placeholder="Search by any field (AWB, destination, code, zone...)">
+        <button type="button" class="btn btn-primary" id="btn-search" onclick="filterTable()"><i class="fa fa-search"></i> Search</button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-clear-search" onclick="clearSearch()" style="display:none;" title="Clear search"><i class="fa fa-times"></i></button>
     </div>
-    <!-- Entry count info -->
     <div id="search-count" style="font-size:13px; color:#555; margin-bottom:8px; min-height:20px;"></div>
-
-    <div id="table-loading" class="text-center py-3" style="display:none;">
-        <i class="fa fa-spinner fa-spin"></i> Loading...
-    </div>
+    <div id="table-loading" class="text-center py-3" style="display:none;"><i class="fa fa-spinner fa-spin"></i> Loading...</div>
     <div class="table-responsive">
         <table class="table table-bordered table-striped table-sm" id="booking-table">
             <thead class="table-dark">
-                <tr>
-                    <th>#</th><th>Code</th><th>Date</th><th>AWB</th><th>Dest</th><th>Wt</th>
-                    <th>Courier</th><th>Zone</th><th>Amount</th><th>Total</th>
-                    <th>Client</th><th>Inv No</th><th>Inv Date</th><th>Action</th>
-                </tr>
+                <tr><th>#</th><th>Code</th><th>Date</th><th>AWB</th><th>Dest</th><th>Wt</th><th>Courier</th><th>Zone</th><th>Amount</th><th>Action</th></tr>
             </thead>
-            <tbody id="booking-table-body">
-                <tr><td colspan="14" class="text-center">Loading...</td></tr>
-            </tbody>
+            <tbody id="booking-table-body"><tr><td colspan="10" class="text-center">Loading...</td></tr></tbody>
         </table>
     </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     ZONE SELECTION POPUP (unknown destination)
-     ═══════════════════════════════════════════════ -->
-<div id="zone-overlay"
-     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-            z-index:99999; background:rgba(0,0,0,0.65);
-            align-items:center; justify-content:center;">
-    <div style="background:#fff; border-radius:14px; width:420px;
-                box-shadow:0 16px 60px rgba(0,0,0,0.45); overflow:hidden; animation:popIn .25s ease;">
-        <!-- Header -->
+<!-- ZONE SELECTION POPUP -->
+<div id="zone-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:99999; background:rgba(0,0,0,0.65); align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:14px; width:420px; box-shadow:0 16px 60px rgba(0,0,0,0.45); overflow:hidden; animation:popIn .25s ease;">
         <div style="background:linear-gradient(135deg,#ff9800,#f44336); padding:16px 22px; position:relative;">
             <strong style="font-size:1.05rem; color:#fff;">⚠ Unknown Destination – Select Zone</strong>
-            <button onclick="hideZoneOverlay()"
-                    style="position:absolute;right:14px;top:12px;background:none;border:none;
-                           color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+            <button onclick="hideZoneOverlay()" style="position:absolute;right:14px;top:12px;background:none;border:none; color:#fff;font-size:20px;cursor:pointer;">✕</button>
         </div>
-        <!-- Body -->
         <div style="padding:20px 22px;">
-            <p style="margin-bottom:4px;">
-                Destination:&nbsp;
-                <strong id="zone-dest-label"
-                        style="color:#0d6efd; text-transform:uppercase; font-size:1.05rem;"></strong>
-            </p>
-            <p style="font-size:.82rem; color:#6c757d; margin-bottom:14px;">
-                This destination is not mapped to any zone.<br>
-                Pick a zone below — it will be <em>remembered</em> for future entries.
-            </p>
-
-            <!-- Optional place code -->
+            <p>Destination: <strong id="zone-dest-label" style="color:#0d6efd;"></strong></p>
+            <p style="font-size:.82rem;">Pick a zone below — it will be remembered.</p>
             <div style="margin-bottom:16px;">
-                <label style="font-size:.82rem; font-weight:600; color:#495057;
-                               display:block; margin-bottom:4px;">
-                    Place Code
-                    <span style="font-weight:400; color:#6c757d;">(optional, e.g. MAA, BLR)</span>
-                </label>
-                <input type="text" id="zone-place-code" placeholder="Enter short place code…"
-                       style="width:100%; padding:8px 10px; border:1.5px solid #ced4da;
-                              border-radius:7px; font-size:.93rem; text-transform:uppercase;
-                              transition:border .2s;"
-                       oninput="this.value=this.value.toUpperCase()">
+                <label style="font-size:.82rem; font-weight:600;">Place Code (optional)</label>
+                <input type="text" id="zone-place-code" placeholder="e.g. MAA, BLR" style="width:100%; padding:8px; text-transform:uppercase;">
             </div>
-
-            <!-- Zone buttons -->
             <div style="display:flex; flex-direction:column; gap:9px;">
-                <button class="zone-btn" onclick="confirmZone(1)"
-                        style="background:linear-gradient(90deg,#0d6efd,#3b93ff);">
-                    <span class="zbadge">Z1</span> CHENNAI
-                </button>
-                <button class="zone-btn" onclick="confirmZone(2)"
-                        style="background:linear-gradient(90deg,#198754,#2dba79);">
-                    <span class="zbadge">Z2</span> TAMIL NADU
-                </button>
-                <button class="zone-btn" onclick="confirmZone(3)"
-                        style="background:linear-gradient(90deg,#e67e22,#f39c12); color:#000;">
-                    <span class="zbadge" style="color:#000;">Z3</span> SOUTH – KERALA · KARNATAKA · ANDHRA · TELANGANA
-                </button>
-                <button class="zone-btn" onclick="confirmZone(4)"
-                        style="background:linear-gradient(90deg,#dc3545,#e55365);">
-                    <span class="zbadge">Z4</span> NORTH METRO – DELHI · MUMBAI · KOLKATA
-                </button>
-                <button class="zone-btn" onclick="confirmZone(5)"
-                        style="background:linear-gradient(90deg,#495057,#6c757d);">
-                    <span class="zbadge">Z5</span> ROI – REST OF INDIA
-                </button>
+                <button class="zone-btn" onclick="confirmZone(1)" style="background:linear-gradient(90deg,#0d6efd,#3b93ff);"><span class="zbadge">Z1</span> CHENNAI</button>
+                <button class="zone-btn" onclick="confirmZone(2)" style="background:linear-gradient(90deg,#198754,#2dba79);"><span class="zbadge">Z2</span> TAMIL NADU</button>
+                <button class="zone-btn" onclick="confirmZone(3)" style="background:linear-gradient(90deg,#e67e22,#f39c12); color:#000;"><span class="zbadge">Z3</span> SOUTH</button>
+                <button class="zone-btn" onclick="confirmZone(4)" style="background:linear-gradient(90deg,#dc3545,#e55365);"><span class="zbadge">Z4</span> NORTH METRO</button>
+                <button class="zone-btn" onclick="confirmZone(5)" style="background:linear-gradient(90deg,#495057,#6c757d);"><span class="zbadge">Z5</span> ROI</button>
             </div>
         </div>
     </div>
@@ -234,757 +215,534 @@
 
 {% block scripts %}
 <script>
-// ══════════════════════════════════════════════════════════════
-//  GLOBALS
-// ══════════════════════════════════════════════════════════════
+// ------------------------------------------------------------
+// GLOBALS
+// ------------------------------------------------------------
 let currentView = 'recent';
 const destCache = {};
 let destTimer   = null;
 let pendingDest = null;
-let lastRateRow = null;   // cached rate row for current code+zone
+let lastRateRow = null;
+let previewData = [];  // holds imported rows
+
+const escapeHtml = (s) => { if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); };
+const esc = escapeHtml;
 
 function setVal(id, v) { document.getElementById(id).value = v; }
 function getVal(id)    { return (document.getElementById(id).value || "").trim().toUpperCase(); }
 
-// ══════════════════════════════════════════════════════════════
-//  ZONE KEYWORD MAP  (pure client-side fast detection)
-// ══════════════════════════════════════════════════════════════
+// ---------- ZONE KEYWORD MAP ----------
 const ZONE_MAP = {
-  1: [
-    "CHENNAI","MADRAS","TAMBARAM","VELACHERY","ADYAR","ANNA NAGAR","T NAGAR",
-    "NUNGAMBAKKAM","PERAMBUR","ROYAPURAM","EGMORE","KODAMBAKKAM","CHROMPET",
-    "SHOLINGANALLUR","PORUR","AMBATTUR","AVADI","POONAMALLEE","PALLAVARAM",
-    "PERUNGUDI","THIRUVANMIYUR","MYLAPORE","TRIPLICANE","WASHERMANPET",
-    "TONDIARPET","GUINDY","BESANT NAGAR","KILPAUK","CHETPET","AMINJIKARAI",
-    "VILLIVAKKAM","THIRUVOTTIYUR","MANALI","MADHAVARAM","KOLATHUR","MOGAPPAIR",
-    "VIRUGAMBAKKAM","ASHOK NAGAR","K.K. NAGAR","WEST MAMBALAM","SAIDAPET",
-    "KOTTURPURAM","INJAMBAKKAM","THORAIPAKKAM","PERUNGALATHUR","PAMMAL",
-    "SELAIYUR","MUDICHUR","URAPAKKAM","GUDUVANCHERY","CHENGALPATTU"
-  ],
-  2: [
-    "COIMBATORE","MADURAI","TRICHY","TIRUCHIRAPPALLI","SALEM","TIRUNELVELI",
-    "VELLORE","ERODE","TIRUPPUR","THOOTHUKUDI","TUTICORIN","DINDIGUL",
-    "THANJAVUR","KANCHIPURAM","KUMBAKONAM","NAGERCOIL","SIVAGANGAI",
-    "NAMAKKAL","KARUR","PUDUKOTTAI","RAMANATHAPURAM","VIRUDHUNAGAR",
-    "CUDDALORE","NAGAPATTINAM","OOTY","UDHAGAMANDALAM","KODAIKANAL",
-    "HOSUR","RANIPET","TIRUVANNAMALAI","VILLUPURAM","ARIYALUR","PERAMBALUR",
-    "KALLAKURICHI","TENKASI","KRISHNAGIRI","DHARMAPURI","THENI","NILGIRIS",
-    "TIRUPATTUR","MAYILADUTHURAI","RAMANATHAPURAM","SIVAKASI","RAJAPALAYAM",
-    "TAMILNADU","TAMIL NADU","PONDICHERRY","PUDUCHERRY","KARAIKAL"
-  ],
-  3: [
-    // Kerala
-    "KERALA","THIRUVANANTHAPURAM","TRIVANDRUM","KOCHI","COCHIN","KOZHIKODE",
-    "CALICUT","THRISSUR","KOLLAM","PALAKKAD","ALAPPUZHA","ALLEPPEY","KANNUR",
-    "MALAPPURAM","KASARAGOD","WAYANAD","IDUKKI","PATHANAMTHITTA","ERNAKULAM",
-    "KOTTAYAM","TRISSUR","THRISSUR","ALAPUZHA",
-    // Karnataka
-    "KARNATAKA","BENGALURU","BANGALORE","MYSURU","MYSORE","HUBLI","DHARWAD",
-    "MANGALURU","MANGALORE","BELAGAVI","BELGAUM","GULBARGA","KALABURAGI",
-    "DAVANAGERE","BELLARY","VIJAYAPURA","BIJAPUR","SHIMOGA","SHIVAMOGGA",
-    "TUMKUR","UDUPI","HASSAN","BIDAR","RAICHUR","BAGALKOT","CHITRADURGA",
-    "GADAG","KOPPAL","YADGIR","CHAMARAJANAGAR","MANDYA","CHIKMAGALUR",
-    "CHIKKAMAGALURU","KODAGU","COORG","RAMNAGARA","CHIKKABALLAPUR",
-    // Andhra Pradesh
-    "ANDHRA","VISAKHAPATNAM","VIZAG","VIJAYAWADA","GUNTUR","NELLORE",
-    "KURNOOL","RAJAHMUNDRY","KAKINADA","TIRUPATI","ANANTAPUR","KADAPA",
-    "CHITTOOR","ELURU","ONGOLE","VIZIANAGARAM","SRIKAKULAM","EAST GODAVARI",
-    "WEST GODAVARI","PRAKASAM","YSR KADAPA",
-    // Telangana
-    "TELANGANA","HYDERABAD","WARANGAL","NIZAMABAD","KHAMMAM","KARIMNAGAR",
-    "RAMAGUNDAM","SECUNDERABAD","NALGONDA","ADILABAD","MAHBUBNAGAR",
-    "SANGAREDDY","SIDDIPET","MANCHERIAL","JAGTIAL","NIRMAL","NAGARKURNOOL",
-    "SURYAPET","YADADRI","MEDCHAL","RANGAREDDY","MEDAK","VIKARABAD"
-  ],
-  4: [
-    // Delhi NCR
-    "DELHI","NEW DELHI","GURGAON","GURUGRAM","NOIDA","FARIDABAD",
-    "GHAZIABAD","GREATER NOIDA","DWARKA","ROHINI","PITAMPURA","JANAKPURI",
-    // Mumbai
-    "MUMBAI","BOMBAY","THANE","NAVI MUMBAI","PUNE","NASHIK","NAGPUR",
-    "KALYAN","VASAI","MIRA ROAD","BHIWANDI","PANVEL","KHARGHAR",
-    // Kolkata
-    "KOLKATA","CALCUTTA","HOWRAH","DURGAPUR","ASANSOL","SILIGURI",
-    "HALDIA","KHARAGPUR","KOLKATTA"
-  ]
+  1: ["CHENNAI","MADRAS","TAMBARAM","VELACHERY","ADYAR","ANNA NAGAR","T NAGAR","NUNGAMBAKKAM","PERAMBUR","ROYAPURAM","EGMORE","KODAMBAKKAM","CHROMPET","SHOLINGANALLUR","PORUR","AMBATTUR","AVADI","POONAMALLEE","PALLAVARAM","PERUNGUDI","THIRUVANMIYUR","MYLAPORE","TRIPLICANE","WASHERMANPET","TONDIARPET","GUINDY","BESANT NAGAR","KILPAUK","CHETPET","AMINJIKARAI","VILLIVAKKAM","THIRUVOTTIYUR","MANALI","MADHAVARAM","KOLATHUR","MOGAPPAIR","VIRUGAMBAKKAM","ASHOK NAGAR","K.K. NAGAR","WEST MAMBALAM","SAIDAPET","KOTTURPURAM","INJAMBAKKAM","THORAIPAKKAM","PERUNGALATHUR","PAMMAL","SELAIYUR","MUDICHUR","URAPAKKAM","GUDUVANCHERY","CHENGALPATTU"],
+  2: ["COIMBATORE","MADURAI","TRICHY","TIRUCHIRAPPALLI","SALEM","TIRUNELVELI","VELLORE","ERODE","TIRUPPUR","THOOTHUKUDI","TUTICORIN","DINDIGUL","THANJAVUR","KANCHIPURAM","KUMBAKONAM","NAGERCOIL","SIVAGANGAI","NAMAKKAL","KARUR","PUDUKOTTAI","RAMANATHAPURAM","VIRUDHUNAGAR","CUDDALORE","NAGAPATTINAM","OOTY","UDHAGAMANDALAM","KODAIKANAL","HOSUR","RANIPET","TIRUVANNAMALAI","VILLUPURAM","ARIYALUR","PERAMBALUR","KALLAKURICHI","TENKASI","KRISHNAGIRI","DHARMAPURI","THENI","NILGIRIS","TIRUPATTUR","MAYILADUTHURAI","RAMANATHAPURAM","SIVAKASI","RAJAPALAYAM","TAMILNADU","TAMIL NADU","PONDICHERRY","PUDUCHERRY","KARAIKAL"],
+  3: ["KERALA","THIRUVANANTHAPURAM","TRIVANDRUM","KOCHI","COCHIN","KOZHIKODE","CALICUT","THRISSUR","KOLLAM","PALAKKAD","ALAPPUZHA","ALLEPPEY","KANNUR","MALAPPURAM","KASARAGOD","WAYANAD","IDUKKI","PATHANAMTHITTA","ERNAKULAM","KOTTAYAM","KARNATAKA","BENGALURU","BANGALORE","MYSURU","MYSORE","HUBLI","DHARWAD","MANGALURU","MANGALORE","BELAGAVI","BELGAUM","GULBARGA","KALABURAGI","DAVANAGERE","BELLARY","VIJAYAPURA","BIJAPUR","SHIMOGA","SHIVAMOGGA","TUMKUR","UDUPI","HASSAN","BIDAR","RAICHUR","BAGALKOT","CHITRADURGA","ANDHRA","VISAKHAPATNAM","VIZAG","VIJAYAWADA","GUNTUR","NELLORE","KURNOOL","RAJAHMUNDRY","KAKINADA","TIRUPATI","ANANTAPUR","KADAPA","CHITTOOR","ELURU","ONGOLE","VIZIANAGARAM","TELANGANA","HYDERABAD","WARANGAL","NIZAMABAD","KHAMMAM","KARIMNAGAR","RAMAGUNDAM","SECUNDERABAD","NALGONDA","ADILABAD","MAHBUBNAGAR","SANGAREDDY","SIDDIPET"],
+  4: ["DELHI","NEW DELHI","GURGAON","GURUGRAM","NOIDA","FARIDABAD","GHAZIABAD","GREATER NOIDA","DWARKA","ROHINI","PITAMPURA","JANAKPURI","MUMBAI","BOMBAY","THANE","NAVI MUMBAI","PUNE","NASHIK","NAGPUR","KALYAN","VASAI","MIRA ROAD","BHIWANDI","PANVEL","KHARGHAR","KOLKATA","CALCUTTA","HOWRAH","DURGAPUR","ASANSOL","SILIGURI","HALDIA","KHARAGPUR"]
 };
-
-/**
- * Client-side keyword zone detection.
- * Returns { zone, label } or null.
- */
 function detectZoneByKeyword(dest) {
   const d = dest.trim().toUpperCase();
-  for (const [z, keywords] of Object.entries(ZONE_MAP)) {
-    for (const kw of keywords) {
-      if (d === kw || d.includes(kw) || kw.includes(d)) {
-        return { zone: parseInt(z), label: ZONE_LABELS[z] };
-      }
-    }
-  }
-  return null;   // unknown → show popup
+  for (const [z, keywords] of Object.entries(ZONE_MAP))
+    for (const kw of keywords)
+      if (d === kw || d.includes(kw) || kw.includes(d)) return { zone: parseInt(z), label: ZONE_LABELS[z] };
+  return null;
 }
-
-const ZONE_LABELS = {
-  1: "Chennai", 2: "Tamil Nadu", 3: "South India", 4: "North Metro", 5: "ROI"
-};
-const ZONE_COLORS = {
-  1: { bg:"#cce5ff", color:"#004085", badge:"#0d6efd" },
-  2: { bg:"#d4edda", color:"#155724", badge:"#198754" },
-  3: { bg:"#fff3cd", color:"#856404", badge:"#e67e22" },
-  4: { bg:"#f8d7da", color:"#721c24", badge:"#dc3545" },
-  5: { bg:"#e2e3e5", color:"#383d41", badge:"#6c757d" },
-};
-
-// ══════════════════════════════════════════════════════════════
-//  ZONE BADGE
-// ══════════════════════════════════════════════════════════════
+const ZONE_LABELS = {1:"Chennai",2:"Tamil Nadu",3:"South India",4:"North Metro",5:"ROI"};
+const ZONE_COLORS = {1:{ bg:"#cce5ff", color:"#004085", badge:"#0d6efd" },2:{ bg:"#d4edda", color:"#155724", badge:"#198754" },3:{ bg:"#fff3cd", color:"#856404", badge:"#e67e22" },4:{ bg:"#f8d7da", color:"#721c24", badge:"#dc3545" },5:{ bg:"#e2e3e5", color:"#383d41", badge:"#6c757d" }};
 function showZoneBadge(zone, label, source) {
   const wrap = document.getElementById("zone-badge-wrap");
   const c = ZONE_COLORS[zone] || ZONE_COLORS[5];
-  const src = { saved:"💾 saved", rate_exact:"📋 rate table",
-                rate_partial:"📋 partial match", keyword:"🔍 auto-detected" }[source] || "";
-  wrap.innerHTML = `
-    <span style="display:inline-flex;align-items:center;gap:6px;
-                 background:${c.bg};color:${c.color};
-                 padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">
-      <span style="background:${c.badge};color:#fff;
-                   border-radius:50%;width:18px;height:18px;
-                   display:inline-flex;align-items:center;justify-content:center;
-                   font-size:10px;">Z${zone}</span>
-      Zone ${zone} – ${label}
-      ${src ? `<span style="font-weight:400;opacity:.75;font-size:11px;">(${src})</span>` : ""}
-    </span>`;
+  const src = { saved:"💾 saved", rate_exact:"📋 rate table", rate_partial:"📋 partial match", keyword:"🔍 auto-detected" }[source] || "";
+  wrap.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px; background:${c.bg};color:${c.color}; padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;"><span style="background:${c.badge};color:#fff; border-radius:50%;width:18px;height:18px; display:inline-flex;align-items:center;justify-content:center; font-size:10px;">Z${zone}</span> Zone ${zone} – ${label} ${src ? `<span style="font-weight:400;opacity:.75;font-size:11px;">(${src})</span>` : ""}</span>`;
 }
-function clearZoneBadge() {
-  document.getElementById("zone-badge-wrap").innerHTML = "";
-}
-
-// ══════════════════════════════════════════════════════════════
-//  APPLY / CLEAR ZONE
-// ══════════════════════════════════════════════════════════════
+function clearZoneBadge() { document.getElementById("zone-badge-wrap").innerHTML = ""; }
 function applyZone(place, zoneNum, source) {
   const el = document.getElementById("bk-zone");
   el.value = zoneNum;
   const c = ZONE_COLORS[zoneNum] || ZONE_COLORS[5];
-  el.style.background = c.bg;
-  el.style.color = c.color;
+  el.style.background = c.bg; el.style.color = c.color;
   showZoneBadge(zoneNum, ZONE_LABELS[zoneNum] || "ROI", source || "");
 }
 function clearZone() {
   const el = document.getElementById("bk-zone");
-  el.value = "";
-  el.style.background = "#f0f4ff";
-  el.style.color = "#1a3a6b";
-  clearZoneBadge();
-  lastRateRow = null;
+  el.value = ""; el.style.background = "#f0f4ff"; el.style.color = "#1a3a6b";
+  clearZoneBadge(); lastRateRow = null;
 }
 
-// ══════════════════════════════════════════════════════════════
-//  WEIGHT → SLAB → RATE
-// ══════════════════════════════════════════════════════════════
+// ---------- RATE SLABS ----------
 const SLABS = [
-  { max:0.25,     key:"rate_250g",      label:"≤250 g"    },
-  { max:0.50,     key:"rate_500g",      label:"≤500 g"    },
-  { max:1.00,     key:"rate_500g_1",    label:"≤1 kg"     },
-  { max:3.00,     key:"rate_1_to_3kg",  label:"1–3 kg/kg" },
-  { max:10.00,    key:"rate_3_to_10kg", label:"3–10 kg/kg"},
-  { max:Infinity, key:"rate_above_10kg",label:">10 kg/kg" },
+  { max:0.25, key:"rate_250g", label:"≤250 g" }, { max:0.50, key:"rate_500g", label:"≤500 g" },
+  { max:1.00, key:"rate_500g_1", label:"≤1 kg" }, { max:3.00, key:"rate_1_to_3kg", label:"1–3 kg/kg" },
+  { max:10.00, key:"rate_3_to_10kg", label:"3–10 kg/kg" }, { max:Infinity, key:"rate_above_10kg", label:">10 kg/kg" }
 ];
-
 function computeAmount(rateRow, weight) {
   if (!rateRow || !weight) return null;
   const w = parseFloat(weight);
   if (isNaN(w) || w <= 0) return null;
-  for (const s of SLABS) {
+  for (const s of SLABS)
     if (w <= s.max) {
       const rate = parseFloat(rateRow[s.key] || 0);
-      // per-kg slabs (>1 kg): multiply
       const amount = s.max > 1 ? +(rate * w).toFixed(2) : rate;
       return { amount, slab: s.label, rate };
     }
-  }
   return null;
 }
-
-// ══════════════════════════════════════════════════════════════
-//  RATE LOOKUP  (from DB for code + zone)
-// ══════════════════════════════════════════════════════════════
 async function fetchRate(code, zone) {
   if (!code || !zone) return;
-  try {
-    const r = await fetch(
-      `/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${encodeURIComponent(zone)}`
-    ).then(x => x.json());
-    lastRateRow = (r && r.id) ? r : null;
-  } catch(e) { lastRateRow = null; }
+  try { const r = await fetch(`/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${encodeURIComponent(zone)}`).then(x=>x.json()); lastRateRow = (r && r.id) ? r : null; } catch(e) { lastRateRow = null; }
   applyWeightRate();
 }
-
 function applyWeightRate() {
-  const weight = document.getElementById("bk-weight").value;
-  const zone   = document.getElementById("bk-zone").value;
-  const code   = getVal("bk-code");
-  const info   = document.getElementById("rate-info");
-
-  if (!lastRateRow) {
-    if (code && zone) {
-      info.innerHTML = `<span style="color:#dc3545">⚠ No rate found for code <strong>${code}</strong> zone <strong>${zone}</strong></span>`;
-    }
-    clearAmounts();
-    return;
-  }
+  const weight = document.getElementById("bk-weight").value, zone = document.getElementById("bk-zone").value, code = getVal("bk-code"), info = document.getElementById("rate-info");
+  if (!lastRateRow) { if (code && zone) info.innerHTML = `<span style="color:#dc3545">⚠ No rate found for code <strong>${code}</strong> zone <strong>${zone}</strong></span>`; clearAmounts(); return; }
   if (!weight || parseFloat(weight) <= 0) { clearAmounts(); return; }
-
   const result = computeAmount(lastRateRow, weight);
   if (!result) { clearAmounts(); return; }
-
-  document.getElementById("bk-auto").value  = result.amount.toFixed(2);
-  document.getElementById("bk-total").value = result.amount.toFixed(2);
-
-  // Build slab table for info bar
-  const slabRows = SLABS.map(s => {
-    const rv = parseFloat(lastRateRow[s.key] || 0);
-    const active = s.label === result.slab;
-    return `<span style="margin-right:10px;${active
-      ? "font-weight:700;color:#198754;text-decoration:underline;" : "color:#6c757d"}">
-      ${s.label}: ₹${rv.toFixed(2)}</span>`;
-  }).join("");
-
-  info.innerHTML = `
-    ✓ <strong>${code}</strong> → Zone ${zone} (${ZONE_LABELS[zone] || ""}) |
-    Slab: <strong style="color:#0d6efd">${result.slab}</strong> |
-    Rate: ₹${result.rate.toFixed(2)} |
-    <strong style="color:#198754">Total: ₹${result.amount.toFixed(2)}</strong>
-    <br><span style="font-size:11px;">${slabRows}</span>`;
-
-  // flash
-  const autoEl = document.getElementById("bk-auto");
-  autoEl.classList.remove("rate-flash");
-  void autoEl.offsetWidth;
-  autoEl.classList.add("rate-flash");
+  document.getElementById("bk-auto").value = result.amount.toFixed(2);
+  const slabRows = SLABS.map(s => { const rv = parseFloat(lastRateRow[s.key] || 0); const active = s.label === result.slab; return `<span style="margin-right:10px;${active ? "font-weight:700;color:#198754;text-decoration:underline;" : "color:#6c757d"}">${s.label}: ₹${rv.toFixed(2)}</span>`; }).join("");
+  info.innerHTML = `✓ <strong>${code}</strong> → Zone ${zone} (${ZONE_LABELS[zone] || ""}) | Slab: <strong style="color:#0d6efd">${result.slab}</strong> | Rate: ₹${result.rate.toFixed(2)} | <strong style="color:#198754">Amount: ₹${result.amount.toFixed(2)}</strong><br><span style="font-size:11px;">${slabRows}</span>`;
+  const autoEl = document.getElementById("bk-auto"); autoEl.classList.remove("rate-flash"); void autoEl.offsetWidth; autoEl.classList.add("rate-flash");
 }
+function clearAmounts() { document.getElementById("bk-auto").value = ""; }
+function onWeightInput() { applyWeightRate(); }
+document.addEventListener("DOMContentLoaded", () => { document.getElementById("bk-weight").addEventListener("change", applyWeightRate); });
 
-function clearAmounts() {
-  ["bk-auto","bk-total"].forEach(id => document.getElementById(id).value = "");
-}
-
-function onWeightInput() {
-  applyWeightRate();
-}
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("bk-weight").addEventListener("change", applyWeightRate);
-});
-
-// ══════════════════════════════════════════════════════════════
-//  DESTINATION RESOLUTION  (main smart flow)
-// ══════════════════════════════════════════════════════════════
+// ---------- DESTINATION RESOLUTION ----------
 async function resolveDestination(dest) {
-  const code   = getVal("bk-code");
-  const destUp = dest.trim().toUpperCase();
-  const info   = document.getElementById("rate-info");
+  const code = getVal("bk-code"), destUp = dest.trim().toUpperCase(), info = document.getElementById("rate-info");
   if (!destUp) { clearZone(); clearAmounts(); return; }
-
   const cacheKey = code + "|" + destUp;
-
-  // 1. Memory cache
   if (destCache[cacheKey]) {
     const c = destCache[cacheKey];
     applyZone(c.place, c.zone, c.source);
     info.innerHTML = `🔍 Matched: <strong>${c.place}</strong> (Zone ${c.zone} – ${ZONE_LABELS[c.zone]||""}) <span style="color:#6c757d">[cache]</span>`;
-    await fetchRate(code, c.zone);
-    return;
+    await fetchRate(code, c.zone); return;
   }
-
-  // 2. DB lookup (place_zones + rates table)
   try {
-    const res  = await fetch(`/api/dest/zone-lookup?dest=${encodeURIComponent(destUp)}&code=${encodeURIComponent(code)}`);
+    const res = await fetch(`/api/dest/zone-lookup?dest=${encodeURIComponent(destUp)}&code=${encodeURIComponent(code)}`);
     const data = await res.json();
     if (data && data.place) {
-      const entry = { place: data.place, zone: data.zone, source: "rate_exact" };
-      destCache[cacheKey] = entry;
+      destCache[cacheKey] = { place: data.place, zone: data.zone, source: "rate_exact" };
       applyZone(data.place, data.zone, "rate_exact");
       info.innerHTML = `📋 Matched: <strong>${data.place}</strong> (Zone ${data.zone} – ${ZONE_LABELS[data.zone]||""})`;
-      await fetchRate(code, data.zone);
-      return;
+      await fetchRate(code, data.zone); return;
     }
-  } catch(e) { console.error("DB zone lookup error:", e); }
-
-  // 3. Client-side keyword detection
+  } catch(e) { console.error(e); }
   const kwMatch = detectZoneByKeyword(destUp);
   if (kwMatch) {
-    const entry = { place: destUp, zone: kwMatch.zone, source: "keyword" };
-    destCache[cacheKey] = entry;
+    destCache[cacheKey] = { place: destUp, zone: kwMatch.zone, source: "keyword" };
     applyZone(destUp, kwMatch.zone, "keyword");
     info.innerHTML = `🔍 Auto-detected: <strong>${destUp}</strong> → Zone ${kwMatch.zone} – ${kwMatch.label}`;
-    await fetchRate(code, kwMatch.zone);
-    return;
+    await fetchRate(code, kwMatch.zone); return;
   }
-
-  // 4. Unknown → show popup
-  clearZone();
-  clearAmounts();
+  clearZone(); clearAmounts();
   info.innerHTML = `<span style="color:#dc3545">⚠ Destination not found – please select zone below</span>`;
   showZoneOverlay(destUp);
 }
+function onDestInput(val) { clearZone(); clearAmounts(); document.getElementById("rate-info").textContent = ""; }
+function onDestBlur(val) { clearTimeout(destTimer); destTimer = setTimeout(() => resolveDestination(val), 180); }
+function onDestKeydown(e) { if (e.key === "Enter" || e.key === "Tab") { clearTimeout(destTimer); resolveDestination(e.target.value); } }
 
-// Destination input events
-function onDestInput(val) {
-  clearZone(); clearAmounts();
-  document.getElementById("rate-info").textContent = "";
-}
-function onDestBlur(val)  {
-  clearTimeout(destTimer);
-  destTimer = setTimeout(() => resolveDestination(val), 180);
-}
-function onDestKeydown(e) {
-  if (e.key === "Enter" || e.key === "Tab") {
-    clearTimeout(destTimer);
-    resolveDestination(e.target.value);
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  ZONE OVERLAY (unknown destination popup)
-// ══════════════════════════════════════════════════════════════
-function showZoneOverlay(dest) {
-  pendingDest = dest;
-  document.getElementById("zone-dest-label").textContent = dest;
-  document.getElementById("zone-place-code").value = "";
-  const ov = document.getElementById("zone-overlay");
-  ov.style.display = "flex";
-}
-function hideZoneOverlay() {
-  document.getElementById("zone-overlay").style.display = "none";
-  pendingDest = null;
-}
+// ---------- ZONE OVERLAY ----------
+function showZoneOverlay(dest) { pendingDest = dest; document.getElementById("zone-dest-label").textContent = dest; document.getElementById("zone-place-code").value = ""; document.getElementById("zone-overlay").style.display = "flex"; }
+function hideZoneOverlay() { document.getElementById("zone-overlay").style.display = "none"; pendingDest = null; }
 async function confirmZone(zone) {
-  const dest      = pendingDest;
-  const placeCode = document.getElementById("zone-place-code").value.trim().toUpperCase();
+  const dest = pendingDest, placeCode = document.getElementById("zone-place-code").value.trim().toUpperCase();
   if (!dest) { hideZoneOverlay(); return; }
   hideZoneOverlay();
   try {
-    await fetch("/api/place/save-zone", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ place: dest, zone, place_code: placeCode || null })
-    });
-    // Invalidate cache and re-resolve
+    await fetch("/api/place/save-zone", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ place: dest, zone, place_code: placeCode || null }) });
     const code = getVal("bk-code");
     delete destCache[code + "|" + dest];
-    // Apply immediately (don't wait for DB re-read)
     applyZone(dest, zone, "saved");
-    document.getElementById("rate-info").innerHTML =
-      `💾 Saved: <strong>${dest}</strong> → Zone ${zone} – ${ZONE_LABELS[zone]||"ROI"}`;
+    document.getElementById("rate-info").innerHTML = `💾 Saved: <strong>${dest}</strong> → Zone ${zone} – ${ZONE_LABELS[zone]||"ROI"}`;
     await fetchRate(code, zone);
-  } catch(e) {
-    console.error("Save zone error:", e);
-    document.getElementById("rate-info").innerHTML =
-      `<span style="color:#dc3545">⚠ Failed to save zone mapping. Please try again.</span>`;
-  }
+  } catch(e) { console.error(e); document.getElementById("rate-info").innerHTML = `<span style="color:#dc3545">⚠ Failed to save zone mapping. Please try again.</span>`; }
 }
 
-// ══════════════════════════════════════════════════════════════
-//  TABLE LOAD (AJAX)
-// ══════════════════════════════════════════════════════════════
+// ---------- TABLE LOAD ----------
 async function loadTable(view) {
-  const tbody      = document.getElementById('booking-table-body');
-  const loadingDiv = document.getElementById('table-loading');
+  const tbody = document.getElementById('booking-table-body'), loadingDiv = document.getElementById('table-loading');
   loadingDiv.style.display = 'block';
-  tbody.innerHTML = '<tr><td colspan="14" class="text-center">Loading...</td></tr>';
-  // Clear search on table reload
-  document.getElementById('searchInput').value = '';
-  document.getElementById('search-count').textContent = '';
-  document.getElementById('btn-clear-search').style.display = 'none';
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
+  document.getElementById('searchInput').value = ''; document.getElementById('search-count').textContent = ''; document.getElementById('btn-clear-search').style.display = 'none';
   try {
-    const url  = view === 'all' ? '/api/bookings?limit=all' : '/api/bookings?limit=10';
+    const url = view === 'all' ? '/api/bookings?limit=all' : '/api/bookings?limit=10';
     const rows = await fetch(url).then(r => r.json());
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="14" class="text-center">No Records</td></tr>';
-      document.getElementById('search-count').textContent = 'Showing 0 – 0 of 0 entries';
-      return;
-    }
-    tbody.innerHTML = rows.map((b, i) => `
-      <tr id="brow-${b.id}">
-        <td>${i+1}</td>
-        <td><strong>${esc(b.code)}</strong></td>
-        <td>${esc(b.booking_date)}</td>
-        <td>${esc(b.awb_no)}</td>
-        <td>${esc(b.destination)}</td>
-        <td>${b.weight}</td>
-        <td>${esc(b.courier)}</td>
-        <td>${esc(b.zone)}</td>
-        <td>${b.auto_amount}</td>
-        <td><strong>${b.total_amount}</strong></td>
-        <td>${esc(b.client_name)}</td>
-        <td>${esc(b.inv_no)}</td>
-        <td>${esc(b.inv_date)}</td>
-        <td style="white-space:nowrap">
-          <button class="btn btn-warning btn-act btn-sm" onclick='bkEdit(${JSON.stringify(b)})'>
-            <i class="fa fa-pen"></i></button>
-          <button class="btn btn-info btn-act btn-sm text-white" onclick='bkCopy(${JSON.stringify(b)})'>
-            <i class="fa fa-copy"></i></button>
-          <button class="btn btn-danger btn-act btn-sm" onclick="deleteBooking(${b.id})">
-            <i class="fa fa-trash"></i></button>
-        </td>
-      </tr>`).join("");
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" class="text-center">No Records</td></tr>'; document.getElementById('search-count').textContent = 'Showing 0 – 0 of 0 entries'; return; }
+    tbody.innerHTML = rows.map((b,i) => `<tr id="brow-${b.id}"><td>${i+1}</td><td><strong>${esc(b.code)}</strong></td><td>${esc(b.booking_date)}</td><td>${esc(b.awb_no)}</td><td>${esc(b.destination)}</td><td>${b.weight}</td><td>${esc(b.courier)}</td><td>${esc(b.zone)}</td><td>${b.auto_amount}</td><td style="white-space:nowrap"><button class="btn btn-warning btn-act btn-sm" onclick='bkEdit(${JSON.stringify(b)})'><i class="fa fa-pen"></i></button> <button class="btn btn-info btn-act btn-sm text-white" onclick='bkCopy(${JSON.stringify(b)})'><i class="fa fa-copy"></i></button> <button class="btn btn-danger btn-act btn-sm" onclick="deleteBooking(${b.id})"><i class="fa fa-trash"></i></button></td></tr>`).join("");
     filterTable();
-  } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="14" class="text-center text-danger">Failed to load</td></tr>';
-  } finally {
-    loadingDiv.style.display = 'none';
-  }
+  } catch(e) { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Failed to load</td></tr>'; }
+  finally { loadingDiv.style.display = 'none'; }
 }
 
-function esc(s) {
-  if (!s) return '';
-  return String(s).replace(/[&<>"']/g, m =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
+// ---------- DELETE ----------
+async function deleteBooking(id) { if (!confirm('Delete this booking?')) return; const fd = new FormData(); fd.append('_action','delete'); fd.append('del_id', id); await fetch('/booking-entry', { method:'POST', body:fd }); await loadTable(currentView); bkCancel(); }
 
-// ══════════════════════════════════════════════════════════════
-//  DELETE
-// ══════════════════════════════════════════════════════════════
-async function deleteBooking(id) {
-  if (!confirm('Delete this booking?')) return;
-  const fd = new FormData();
-  fd.append('_action','delete');
-  fd.append('del_id', id);
-  await fetch('/booking-entry', { method:'POST', body:fd });
-  await loadTable(currentView);
-  bkCancel();
-}
+// ---------- FORM SUBMIT ----------
+document.getElementById('bk-form').addEventListener('submit', async (e) => { e.preventDefault(); const fd = new FormData(e.target); const resp = await fetch('/booking-entry', { method:'POST', body:fd }); if (!resp.ok) { alert('Server error – could not save.'); return; } await loadTable(currentView); bkCancel(); const info = document.getElementById('rate-info'); info.style.color = '#198754'; info.innerHTML = '✓ Saved successfully.'; setTimeout(() => { if (info.innerHTML.includes('Saved')) info.innerHTML = ''; }, 2500); });
 
-// ══════════════════════════════════════════════════════════════
-//  FORM SUBMIT (ADD / EDIT) via AJAX
-// ══════════════════════════════════════════════════════════════
-document.getElementById('bk-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd   = new FormData(e.target);
-  const resp = await fetch('/booking-entry', { method:'POST', body:fd });
-  if (!resp.ok) { alert('Server error – could not save.'); return; }
-  await loadTable(currentView);
-  bkCancel();
-  const info = document.getElementById('rate-info');
-  info.style.color = '#198754';
-  info.innerHTML = '✓ Saved successfully.';
-  setTimeout(() => { if (info.innerHTML.includes('Saved')) info.innerHTML = ''; }, 2500);
-});
+// ---------- VIEW SWITCH ----------
+document.getElementById('btn-show-recent').addEventListener('click', () => { currentView = 'recent'; loadTable('recent'); });
+document.getElementById('btn-show-all').addEventListener('click', () => { if (confirm('Showing all records may be slow. Continue?')) { currentView = 'all'; loadTable('all'); } });
 
-// ══════════════════════════════════════════════════════════════
-//  VIEW SWITCH
-// ══════════════════════════════════════════════════════════════
-document.getElementById('btn-show-recent').addEventListener('click', () => {
-  currentView = 'recent'; loadTable('recent');
-});
-document.getElementById('btn-show-all').addEventListener('click', () => {
-  if (confirm('Showing all records may be slow. Continue?')) {
-    currentView = 'all'; loadTable('all');
-  }
-});
-
-// ══════════════════════════════════════════════════════════════
-//  EDIT / COPY / CANCEL
-// ══════════════════════════════════════════════════════════════
+// ---------- EDIT / COPY / CANCEL ----------
 function bkEdit(b) {
   clearAwbWarning();
-  document.getElementById("bk-action").value  = "edit";
-  document.getElementById("bk-edit-id").value = b.id;
-  document.getElementById("bk-code").value    = b.code       || "";
-  document.getElementById("bk-date").value    = b.booking_date || "";
-  document.getElementById("bk-awb").value     = b.awb_no     || "";
-  document.getElementById("bk-dest").value    = b.destination || "";
-  document.getElementById("bk-weight").value  = b.weight     || "";
-  document.getElementById("bk-courier").value = b.courier    || "";
-  document.getElementById("bk-auto").value    = b.auto_amount || "";
-  document.getElementById("bk-total").value   = b.total_amount || "";
-  document.getElementById("bk-client").value  = b.client_name || "";
-  document.getElementById("bk-invno").value   = b.inv_no     || "";
-  document.getElementById("bk-invdate").value = b.inv_date   || "";
-  document.getElementById("bk-save-lbl").textContent     = "Update";
-  document.getElementById("bk-cancel-btn").style.display = "inline-block";
+  document.getElementById("bk-action").value = "edit"; document.getElementById("bk-edit-id").value = b.id;
+  document.getElementById("bk-code").value = b.code || ""; document.getElementById("bk-date").value = b.booking_date || "";
+  document.getElementById("bk-awb").value = b.awb_no || ""; document.getElementById("bk-dest").value = b.destination || "";
+  document.getElementById("bk-weight").value = b.weight || ""; document.getElementById("bk-courier").value = b.courier || "";
+  document.getElementById("bk-auto").value = b.auto_amount || "";
+  if (b.zone) { const zoneNum = parseInt(b.zone); if (!isNaN(zoneNum)) applyZone(b.destination, zoneNum, "saved"); }
+  document.getElementById("bk-save-lbl").textContent = "Update"; document.getElementById("bk-cancel-btn").style.display = "inline-block";
   document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
-  const row = document.getElementById("brow-" + b.id);
-  if (row) row.classList.add("editing-row");
+  const row = document.getElementById("brow-" + b.id); if (row) row.classList.add("editing-row");
   window.scrollTo({ top:0, behavior:"smooth" });
   document.getElementById("rate-info").textContent = "";
   if (b.destination) resolveDestination(b.destination);
 }
-function bkCopy(b) {
-  bkEdit(b);
-  document.getElementById("bk-action").value  = "add";
-  document.getElementById("bk-edit-id").value = "";
-  document.getElementById("bk-awb").value     = "";
-  document.getElementById("bk-invno").value   = "";
-  document.getElementById("bk-save-lbl").textContent = "Save";
-}
+function bkCopy(b) { bkEdit(b); document.getElementById("bk-action").value = "add"; document.getElementById("bk-edit-id").value = ""; document.getElementById("bk-awb").value = ""; document.getElementById("bk-save-lbl").textContent = "Save"; }
 function bkCancel() {
   clearAwbWarning();
-  document.getElementById("bk-action").value  = "add";
-  document.getElementById("bk-edit-id").value = "";
-  ["bk-code","bk-awb","bk-dest","bk-courier","bk-client","bk-invno","bk-invdate"]
-    .forEach(id => document.getElementById(id).value = "");
-  ["bk-weight","bk-auto","bk-total"]
-    .forEach(id => document.getElementById(id).value = "");
+  document.getElementById("bk-action").value = "add"; document.getElementById("bk-edit-id").value = "";
+  ["bk-code","bk-awb","bk-dest","bk-courier"].forEach(id => document.getElementById(id).value = "");
+  ["bk-weight","bk-auto"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("bk-date").value = new Date().toISOString().split("T")[0];
   clearZone();
-  document.getElementById("bk-save-lbl").textContent     = "Save";
-  document.getElementById("bk-cancel-btn").style.display = "none";
-  document.getElementById("rate-info").textContent        = "";
+  document.getElementById("bk-save-lbl").textContent = "Save"; document.getElementById("bk-cancel-btn").style.display = "none";
+  document.getElementById("rate-info").textContent = "";
   document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
-  pendingDest = null;
-  lastRateRow = null;
+  pendingDest = null; lastRateRow = null;
 }
 
-// ══════════════════════════════════════════════════════════════
-//  AWB DUPLICATE CHECK
-// ══════════════════════════════════════════════════════════════
+// ---------- AWB DUPLICATE CHECK ----------
 let awbDuplicate = false, awbCheckTimer = null;
-const awbInput   = document.getElementById("bk-awb");
-const awbWarn    = document.getElementById("awb-warn");
-const awbWarnTxt = document.getElementById("awb-warn-text");
+const awbInput = document.getElementById("bk-awb"), awbWarn = document.getElementById("awb-warn"), awbWarnTxt = document.getElementById("awb-warn-text");
+function clearAwbWarning() { awbDuplicate = false; awbInput.style.cssText = ""; awbWarn.style.display = "none"; awbWarnTxt.textContent = ""; }
+function showAwbWarning(msg) { awbDuplicate = true; awbInput.style.borderColor = "#dc3545"; awbInput.style.background = "#fff0f0"; awbInput.style.color = "#dc3545"; awbInput.style.fontWeight = "bold"; awbWarnTxt.textContent = msg; awbWarn.style.display = "block"; }
+awbInput.addEventListener("input", () => { clearAwbWarning(); clearTimeout(awbCheckTimer); const val = awbInput.value.trim(); if (!val) return; awbCheckTimer = setTimeout(async () => { const editId = document.getElementById("bk-edit-id").value; const data = await fetch(`/api/ac/awb_check?awb=${encodeURIComponent(val)}&edit_id=${editId}`).then(r=>r.json()).catch(()=>({exists:false})); if (data.exists) showAwbWarning(`Duplicate! AWB "${val}" already used for ${data.code||''} on ${data.date||''} → ${data.dest||''}`); }, 350); });
+awbInput.addEventListener("keydown", e => { if (awbDuplicate && (e.key==="Tab"||e.key==="Enter")) { e.preventDefault(); e.stopImmediatePropagation(); awbInput.focus(); } });
 
-function clearAwbWarning() {
-  awbDuplicate = false;
-  awbInput.style.cssText = "";
-  awbWarn.style.display  = "none";
-  awbWarnTxt.textContent = "";
-}
-function showAwbWarning(msg) {
-  awbDuplicate = true;
-  awbInput.style.borderColor = "#dc3545";
-  awbInput.style.background  = "#fff0f0";
-  awbInput.style.color       = "#dc3545";
-  awbInput.style.fontWeight  = "bold";
-  awbWarnTxt.textContent     = msg;
-  awbWarn.style.display      = "block";
-}
-awbInput.addEventListener("input", () => {
-  clearAwbWarning();
-  clearTimeout(awbCheckTimer);
-  const val = awbInput.value.trim();
-  if (!val) return;
-  awbCheckTimer = setTimeout(async () => {
-    const editId = document.getElementById("bk-edit-id").value;
-    const data   = await fetch(
-      `/api/ac/awb_check?awb=${encodeURIComponent(val)}&edit_id=${editId}`
-    ).then(r => r.json()).catch(() => ({ exists:false }));
-    if (data.exists)
-      showAwbWarning(`Duplicate! AWB "${val}" already used for ${data.code||''} on ${data.date||''} → ${data.dest||''}`);
-  }, 350);
-});
-awbInput.addEventListener("keydown", e => {
-  if (awbDuplicate && (e.key==="Tab"||e.key==="Enter")) {
-    e.preventDefault(); e.stopImmediatePropagation(); awbInput.focus();
-  }
-});
-
-// ══════════════════════════════════════════════════════════════
-//  SEARCH  (with button + count display)
-// ══════════════════════════════════════════════════════════════
+// ---------- SEARCH ----------
 function filterTable() {
-  const q       = document.getElementById('searchInput').value.toLowerCase().trim();
-  const rows    = Array.from(document.getElementById('booking-table-body').getElementsByTagName('tr'));
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  const rows = Array.from(document.getElementById('booking-table-body').getElementsByTagName('tr'));
   const clearBtn = document.getElementById('btn-clear-search');
   let shown = 0, total = 0;
-
-  // Remove old no-results row if present
-  const oldInfo = document.getElementById('search-info-row');
-  if (oldInfo) oldInfo.remove();
-
+  const oldInfo = document.getElementById('search-info-row'); if (oldInfo) oldInfo.remove();
   for (const row of rows) {
-    // Skip colspan helper rows (loading / no-records)
     if (row.cells.length === 1 && row.cells[0].colSpan > 1) continue;
     total++;
-    let text = '';
-    for (let i = 0; i < row.cells.length - 1; i++) {
-      text += row.cells[i].innerText.toLowerCase() + ' ';
-    }
+    let text = ''; for (let i=0; i<row.cells.length-1; i++) text += row.cells[i].innerText.toLowerCase() + ' ';
     const show = !q || text.includes(q);
     row.style.display = show ? '' : 'none';
     if (show) shown++;
   }
-
-  // Update entry count label
   const countEl = document.getElementById('search-count');
-  if (total > 0) {
-    const label = q
-      ? `Showing ${shown} – ${shown} of ${total} entries <span style="color:#0d6efd;">(filtered by "<strong>${esc(q)}</strong>")</span>`
-      : `Showing 1 – ${shown} of ${total} entries`;
-    countEl.innerHTML = label;
-  } else {
-    countEl.textContent = '';
-  }
-
-  // Show/hide clear button
+  if (total > 0) countEl.innerHTML = q ? `Showing ${shown} – ${shown} of ${total} entries <span style="color:#0d6efd;">(filtered by "<strong>${esc(q)}</strong>")</span>` : `Showing 1 – ${shown} of ${total} entries`;
+  else countEl.textContent = '';
   clearBtn.style.display = q ? 'inline-block' : 'none';
-
-  // No results row
-  if (shown === 0 && q) {
-    const tbody  = document.getElementById('booking-table-body');
-    const infoRow = tbody.insertRow();
-    infoRow.id = 'search-info-row';
-    const cell = infoRow.insertCell(0);
-    cell.colSpan = 14;
-    cell.className = 'text-center text-muted py-3';
-    cell.innerHTML = `<i class="fa fa-search"></i> No records found matching "<strong>${esc(q)}</strong>"`;
-  }
+  if (shown === 0 && q) { const tbody = document.getElementById('booking-table-body'); const infoRow = tbody.insertRow(); infoRow.id = 'search-info-row'; const cell = infoRow.insertCell(0); cell.colSpan = 10; cell.className = 'text-center text-muted py-3'; cell.innerHTML = `<i class="fa fa-search"></i> No records found matching "<strong>${esc(q)}</strong>"`; }
 }
+function clearSearch() { document.getElementById('searchInput').value = ''; document.getElementById('btn-clear-search').style.display = 'none'; filterTable(); }
+document.addEventListener("DOMContentLoaded", () => { document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') filterTable(); }); document.getElementById('searchInput').addEventListener('input', filterTable); });
 
-function clearSearch() {
-  document.getElementById('searchInput').value = '';
-  document.getElementById('btn-clear-search').style.display = 'none';
-  filterTable();
-}
-
-// Trigger search on Enter key
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById('searchInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') filterTable();
-  });
-  // Also support live-as-you-type (optional — remove if you only want button click)
-  document.getElementById('searchInput').addEventListener('input', filterTable);
-});
-
-// ══════════════════════════════════════════════════════════════
-//  AUTOCOMPLETE
-// ══════════════════════════════════════════════════════════════
+// ---------- AUTOCOMPLETE ----------
 function setupAC(inputId, url, onSelect, labelFn, subFn) {
   const input = document.getElementById(inputId);
-  let drop    = document.getElementById(inputId+"-drop");
-  if (!drop) {
-    drop = document.createElement("div");
-    drop.className = "ac-drop"; drop.id = inputId+"-drop";
-    input.parentNode.appendChild(drop);
-  }
+  let drop = document.getElementById(inputId+"-drop");
+  if (!drop) { drop = document.createElement("div"); drop.className = "ac-drop"; drop.id = inputId+"-drop"; input.parentNode.appendChild(drop); }
   let timer, hi = -1;
   const closeMe = () => { drop.classList.remove("open"); hi = -1; };
-  function render(items) {
-    if (!items.length) { closeMe(); return; }
-    drop.innerHTML = ""; hi = 0;
-    items.forEach((item, i) => {
-      const div = document.createElement("div");
-      div.className = "ac-item" + (i===0?" hi":"");
-      const lbl = labelFn ? labelFn(item) : String(item);
-      const sub = subFn  ? subFn(item)   : "";
-      div.innerHTML = `<strong>${esc(lbl)}</strong>` +
-        (sub ? `<div class="ac-sub">${esc(sub)}</div>` : "");
-      div.addEventListener("mousedown", e => { e.preventDefault(); pick(item); });
-      drop.appendChild(div);
-    });
-    drop.classList.add("open");
-    document.querySelectorAll(".ac-drop.open").forEach(d => { if (d!==drop) d.classList.remove("open"); });
-  }
+  function render(items) { if (!items.length) { closeMe(); return; } drop.innerHTML = ""; hi = 0; items.forEach((item,i) => { const div = document.createElement("div"); div.className = "ac-item" + (i===0?" hi":""); const lbl = labelFn ? labelFn(item) : String(item); const sub = subFn ? subFn(item) : ""; div.innerHTML = `<strong>${esc(lbl)}</strong>` + (sub ? `<div class="ac-sub">${esc(sub)}</div>` : ""); div.addEventListener("mousedown", e => { e.preventDefault(); pick(item); }); drop.appendChild(div); }); drop.classList.add("open"); document.querySelectorAll(".ac-drop.open").forEach(d => { if (d!==drop) d.classList.remove("open"); }); }
   const pick = item => { onSelect(item); closeMe(); };
-  const moveHi = delta => {
-    const els = drop.querySelectorAll(".ac-item");
-    if (!els.length) return;
-    if (hi>=0) els[hi]?.classList.remove("hi");
-    hi = Math.max(0, Math.min(els.length-1, (hi<0?0:hi)+delta));
-    els[hi]?.classList.add("hi");
-    els[hi]?.scrollIntoView({ block:"nearest" });
-  };
-  input.addEventListener("input", () => {
-    clearTimeout(timer);
-    const q = input.value.trim();
-    if (!q) { closeMe(); return; }
-    timer = setTimeout(async () => {
-      const data = await fetch(url+encodeURIComponent(q)).then(r=>r.json()).catch(()=>[]);
-      render(data);
-    }, 80);
-  });
-  input.addEventListener("keydown", e => {
-    if (!drop.classList.contains("open")) return;
-    if      (e.key==="ArrowDown") { e.preventDefault(); moveHi(1);  }
-    else if (e.key==="ArrowUp")   { e.preventDefault(); moveHi(-1); }
-    else if (e.key==="Enter")     {
-      const h = drop.querySelector(".ac-item.hi");
-      if (h) { e.preventDefault(); e.stopImmediatePropagation(); h.dispatchEvent(new MouseEvent("mousedown")); }
-    }
-    else if (e.key==="Escape") closeMe();
-  });
+  const moveHi = delta => { const els = drop.querySelectorAll(".ac-item"); if (!els.length) return; if (hi>=0) els[hi]?.classList.remove("hi"); hi = Math.max(0, Math.min(els.length-1, (hi<0?0:hi)+delta)); els[hi]?.classList.add("hi"); els[hi]?.scrollIntoView({ block:"nearest" }); };
+  input.addEventListener("input", () => { clearTimeout(timer); const q = input.value.trim(); if (!q) { closeMe(); return; } timer = setTimeout(async () => { const data = await fetch(url+encodeURIComponent(q)).then(r=>r.json()).catch(()=>[]); render(data); }, 80); });
+  input.addEventListener("keydown", e => { if (!drop.classList.contains("open")) return; if (e.key==="ArrowDown") { e.preventDefault(); moveHi(1); } else if (e.key==="ArrowUp") { e.preventDefault(); moveHi(-1); } else if (e.key==="Enter") { const h = drop.querySelector(".ac-item.hi"); if (h) { e.preventDefault(); e.stopImmediatePropagation(); h.dispatchEvent(new MouseEvent("mousedown")); } } else if (e.key==="Escape") closeMe(); });
   input.addEventListener("blur", () => setTimeout(closeMe, 160));
 }
-document.addEventListener("click", e => {
-  if (!e.target.closest(".ac-wrap"))
-    document.querySelectorAll(".ac-drop.open").forEach(d => d.classList.remove("open"));
-});
-
-function onCodeSelect(item) {
-  setVal("bk-code", item.code);
-  if (item.code_fullform) document.getElementById("bk-client").value = item.code_fullform;
-  const dest = document.getElementById("bk-dest").value.trim();
-  if (dest) resolveDestination(dest);
-}
+document.addEventListener("click", e => { if (!e.target.closest(".ac-wrap")) document.querySelectorAll(".ac-drop.open").forEach(d => d.classList.remove("open")); });
+function onCodeSelect(item) { setVal("bk-code", item.code); const dest = document.getElementById("bk-dest").value.trim(); if (dest) resolveDestination(dest); }
 function onDestACSelect(v) { setVal("bk-dest", v); resolveDestination(v); }
 
-// ══════════════════════════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════════════════════════
+// ============================================================
+// EXCEL IMPORT — INLINE PREVIEW
+// ============================================================
+const importBtn       = document.getElementById('btn-import-excel');
+const hiddenFileInput = document.getElementById('excelFileInput');
+const progressArea    = document.getElementById('importProgressArea');
+const progressBar     = document.getElementById('importProgressBar');
+const importLogDiv    = document.getElementById('importLog');
+
+importBtn.addEventListener('click', () => { hiddenFileInput.click(); });
+
+hiddenFileInput.addEventListener('change', async () => {
+    const file = hiddenFileInput.files[0];
+    if (!file) return;
+
+    // Reset
+    closeInlinePreview();
+    progressArea.style.display = 'block';
+    importLogDiv.innerHTML = '';
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+    progressBar.classList.add('progress-bar-animated');
+
+    const formData = new FormData();
+    formData.append('excel_file', file);
+
+    try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/booking-import', true);
+
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = pct + '%';
+                progressBar.textContent = pct + '%';
+            }
+        };
+
+        xhr.onload = () => {
+            progressBar.classList.remove('progress-bar-animated');
+            if (xhr.status === 200) {
+                const result = JSON.parse(xhr.responseText);
+                if (result.rows && result.rows.length) {
+                    previewData = result.rows;
+                    renderInlinePreview();
+
+                    // Scroll down to preview
+                    setTimeout(() => {
+                        document.getElementById('inlinePreviewSection')
+                            .scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+
+                    if (result.errors && result.errors.length) {
+                        importLogDiv.innerHTML = `<div class="alert alert-warning py-1 mb-0">⚠️ ${result.errors.length} warning(s) — rows with no rate are shown with ₹0.00.</div>`;
+                    } else {
+                        importLogDiv.innerHTML = `<div class="alert alert-success py-1 mb-0">✅ File loaded. Review the preview below and click <strong>Save All Valid Rows</strong>.</div>`;
+                    }
+                } else if (result.error) {
+                    importLogDiv.innerHTML = `<div class="alert alert-danger py-1 mb-0">❌ ${result.error}</div>`;
+                } else {
+                    importLogDiv.innerHTML = `<div class="alert alert-danger py-1 mb-0">❌ No data rows returned.</div>`;
+                }
+            } else {
+                importLogDiv.innerHTML = `<div class="alert alert-danger py-1 mb-0">❌ Server error: ${xhr.statusText}</div>`;
+            }
+            hiddenFileInput.value = '';
+        };
+
+        xhr.onerror = () => {
+            importLogDiv.innerHTML = `<div class="alert alert-danger py-1 mb-0">❌ Network error</div>`;
+        };
+
+        xhr.send(formData);
+    } catch (err) {
+        importLogDiv.innerHTML = `<div class="alert alert-danger py-1 mb-0">❌ ${err.message}</div>`;
+    }
+});
+
+// ---------- RENDER INLINE PREVIEW ----------
+function renderInlinePreview() {
+    const tbody    = document.getElementById('previewTableBody');
+    const errorDiv = document.getElementById('previewError');
+    const section  = document.getElementById('inlinePreviewSection');
+
+    tbody.innerHTML = '';
+    errorDiv.style.display = 'none';
+
+    if (!previewData || previewData.length === 0) {
+        errorDiv.style.display = 'block';
+        errorDiv.innerHTML = 'No valid data to preview.';
+        section.style.display = 'block';
+        return;
+    }
+
+    const validCount   = previewData.filter(r => r.valid).length;
+    const invalidCount = previewData.length - validCount;
+
+    // Summary bar
+    document.getElementById('previewRowCount').textContent = `${previewData.length} rows`;
+    document.getElementById('previewSummaryBar').innerHTML = `
+        <span class="badge bg-success" style="font-size:13px; padding:6px 12px;">
+            <i class="fa fa-check-circle"></i> ${validCount} valid
+        </span>
+        ${invalidCount > 0 ? `<span class="badge bg-danger" style="font-size:13px; padding:6px 12px;">
+            <i class="fa fa-times-circle"></i> ${invalidCount} invalid (will be skipped)
+        </span>` : ''}
+        <span class="text-muted" style="font-size:12px; align-self:center;">
+            <i class="fa fa-pencil"></i> Click any cell to edit before saving
+        </span>
+    `;
+
+    previewData.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+
+        if (!row.valid) {
+            tr.style.backgroundColor = '#ffebee';
+            tr.innerHTML = `
+                <td class="text-center text-muted">${row.temp_id || (idx+2)}</td>
+                <td colspan="8" class="text-danger">
+                    <i class="fa fa-exclamation-triangle"></i> ${esc(row.error || 'Invalid row')}
+                </td>
+                <td class="text-center"><span class="badge bg-danger">❌ Skip</span></td>
+            `;
+        } else {
+            // Zone badge color
+            const zc = ZONE_COLORS[row.zone] || ZONE_COLORS[5];
+            const zLabel = ZONE_LABELS[row.zone] || 'ROI';
+            const amtStyle = (!row.auto_amount || row.auto_amount == 0)
+                ? 'color:#dc3545; font-weight:bold;'
+                : 'color:#198754; font-weight:bold;';
+
+            tr.innerHTML = `
+                <td class="text-center text-muted">${idx+1}</td>
+                <td><input type="text" class="form-control form-control-sm preview-input"
+                    value="${esc(row.code)}" data-field="code" data-idx="${idx}"
+                    style="min-width:70px;"></td>
+                <td><input type="date" class="form-control form-control-sm preview-input"
+                    value="${row.booking_date}" data-field="booking_date" data-idx="${idx}"
+                    style="min-width:130px;"></td>
+                <td><input type="text" class="form-control form-control-sm preview-input"
+                    value="${esc(row.awb_no)}" data-field="awb_no" data-idx="${idx}"
+                    style="min-width:100px;"></td>
+                <td><input type="text" class="form-control form-control-sm preview-input"
+                    value="${esc(row.destination)}" data-field="destination" data-idx="${idx}"
+                    style="min-width:120px;"></td>
+                <td><input type="number" step="0.001" class="form-control form-control-sm preview-input"
+                    value="${row.weight}" data-field="weight" data-idx="${idx}"
+                    style="min-width:80px;"></td>
+                <td>
+                    <select class="form-select form-select-sm preview-input"
+                        data-field="zone" data-idx="${idx}" style="min-width:110px;
+                        background:${zc.bg}; color:${zc.color}; font-weight:600;">
+                        <option value="1" ${row.zone==1?'selected':''}>Z1 Chennai</option>
+                        <option value="2" ${row.zone==2?'selected':''}>Z2 Tamil Nadu</option>
+                        <option value="3" ${row.zone==3?'selected':''}>Z3 South</option>
+                        <option value="4" ${row.zone==4?'selected':''}>Z4 North Metro</option>
+                        <option value="5" ${row.zone==5?'selected':''}>Z5 ROI</option>
+                    </select>
+                </td>
+                <td><input type="number" step="0.01" class="form-control form-control-sm preview-input"
+                    value="${row.auto_amount}" data-field="auto_amount" data-idx="${idx}"
+                    style="min-width:90px; ${amtStyle}"></td>
+                <td><input type="text" class="form-control form-control-sm preview-input"
+                    value="${esc(row.courier || '')}" data-field="courier" data-idx="${idx}"
+                    style="min-width:90px;"></td>
+                <td class="text-center"><span class="badge bg-success">✅ OK</span></td>
+            `;
+        }
+        tbody.appendChild(tr);
+    });
+
+    // Attach change listeners to all inputs/selects
+    document.querySelectorAll('.preview-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx   = parseInt(input.dataset.idx);
+            const field = input.dataset.field;
+            if (previewData[idx] && previewData[idx].valid) {
+                let val = input.value;
+                if (field === 'weight' || field === 'auto_amount') val = parseFloat(val) || 0;
+                if (field === 'zone') {
+                    val = parseInt(val) || 5;
+                    // Update select background color
+                    const zc = ZONE_COLORS[val] || ZONE_COLORS[5];
+                    input.style.background = zc.bg;
+                    input.style.color = zc.color;
+                }
+                previewData[idx][field] = val;
+            }
+        });
+    });
+
+    section.style.display = 'block';
+}
+
+// ---------- CLOSE INLINE PREVIEW ----------
+function closeInlinePreview() {
+    document.getElementById('inlinePreviewSection').style.display = 'none';
+    document.getElementById('previewTableBody').innerHTML = '';
+    document.getElementById('previewSummaryBar').innerHTML = '';
+    previewData = [];
+}
+
+// ---------- SAVE ALL (both top and bottom buttons) ----------
+async function doSaveAll() {
+    const validRows = previewData.filter(r => r.valid);
+    if (validRows.length === 0) { alert('No valid rows to save.'); return; }
+    if (!confirm(`Save ${validRows.length} booking(s)?`)) return;
+
+    const btn1 = document.getElementById('saveAllPreviewBtn');
+    const btn2 = document.getElementById('saveAllPreviewBtn2');
+    [btn1, btn2].forEach(b => { b.disabled = true; b.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...'; });
+
+    try {
+        const resp = await fetch('/booking-import-save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows: validRows })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const msg = `✅ Saved ${result.inserted} record(s) successfully.` +
+                (result.errors.length ? ` ${result.errors.length} skipped (duplicates).` : '');
+            importLogDiv.innerHTML = `<div class="alert alert-success py-1 mb-0">${msg}</div>`;
+            if (result.errors.length) console.warn(result.errors);
+            closeInlinePreview();
+            loadTable(currentView);
+            // Scroll to table
+            setTimeout(() => document.querySelector('.card.p-3:last-of-type')
+                .scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+        } else {
+            alert('Error: ' + (result.message || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    } finally {
+        [btn1, btn2].forEach(b => {
+            b.disabled = false;
+            b.innerHTML = '<i class="fa fa-save"></i> Save All Valid Rows';
+        });
+    }
+}
+
+document.getElementById('saveAllPreviewBtn').addEventListener('click', doSaveAll);
+document.getElementById('saveAllPreviewBtn2').addEventListener('click', doSaveAll);
+
+// ---------- INIT ----------
 document.addEventListener("DOMContentLoaded", () => {
   const d = document.getElementById("bk-date");
   if (!d.value) d.value = new Date().toISOString().split("T")[0];
   loadTable('recent');
-  setupAC("bk-code",   "/api/ac/code?q=",        onCodeSelect,    i => i.code, i => i.code_fullform);
-  setupAC("bk-dest",   "/api/ac/destination?q=", onDestACSelect);
-  setupAC("bk-client", "/api/ac/client?q=",      v => setVal("bk-client", v));
+  setupAC("bk-code", "/api/ac/code?q=", onCodeSelect, i => i.code, i => i.code_fullform);
+  setupAC("bk-dest", "/api/ac/destination?q=", onDestACSelect);
 });
 </script>
 
 <style>
-/* ── Autocomplete ── */
-.ac-drop { display:none; position:absolute; z-index:1000; background:#fff;
-           border:1px solid #ccc; max-height:200px; overflow-y:auto; width:100%; }
+.ac-drop { display:none; position:absolute; z-index:1000; background:#fff; border:1px solid #ccc; max-height:200px; overflow-y:auto; width:100%; }
 .ac-drop.open { display:block; }
 .ac-item { padding:6px 10px; cursor:pointer; border-bottom:1px solid #eee; }
 .ac-item.hi { background:#e0e8ff; }
-.ac-sub  { font-size:11px; color:#6c757d; }
+.ac-sub { font-size:11px; color:#6c757d; }
 .ac-wrap { position:relative; }
-
-/* ── Rate flash animation ── */
-@keyframes rateFlash {
-  0%   { background:#bbf7d0; box-shadow:0 0 0 3px #34d399; }
-  100% { background:transparent; box-shadow:none; }
-}
+@keyframes rateFlash { 0% { background:#bbf7d0; box-shadow:0 0 0 3px #34d399; } 100% { background:transparent; box-shadow:none; } }
 .rate-flash { animation: rateFlash .7s ease; }
-
-/* ── Zone popup animation ── */
-@keyframes popIn {
-  from { opacity:0; transform:scale(.9) translateY(-10px); }
-  to   { opacity:1; transform:scale(1)  translateY(0); }
-}
-
-/* ── Zone buttons in popup ── */
-.zone-btn {
-  width:100%; padding:11px 14px; border:none; border-radius:8px;
-  cursor:pointer; color:#fff; font-weight:600; font-size:.88rem;
-  text-align:left; display:flex; align-items:center; gap:10px;
-  transition:filter .15s, transform .1s;
-}
-.zone-btn:hover  { filter:brightness(1.12); transform:translateX(3px); }
+@keyframes popIn { from { opacity:0; transform:scale(.9) translateY(-10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.zone-btn { width:100%; padding:11px 14px; border:none; border-radius:8px; cursor:pointer; color:#fff; font-weight:600; font-size:.88rem; text-align:left; display:flex; align-items:center; gap:10px; transition:filter .15s, transform .1s; }
+.zone-btn:hover { filter:brightness(1.12); transform:translateX(3px); }
 .zone-btn:active { transform:scale(.98); }
-.zbadge {
-  display:inline-flex; align-items:center; justify-content:center;
-  background:rgba(255,255,255,.25); border-radius:50%;
-  width:24px; height:24px; font-size:11px; font-weight:800; flex-shrink:0;
-}
-
-/* ── AWB shake ── */
-@keyframes awbShake {
-  0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
-  40%{transform:translateX(6px)}   60%{transform:translateX(-4px)}
-  80%{transform:translateX(4px)}
-}
-
-/* ── Editing row highlight ── */
+.zbadge { display:inline-flex; align-items:center; justify-content:center; background:rgba(255,255,255,.25); border-radius:50%; width:24px; height:24px; font-size:11px; font-weight:800; flex-shrink:0; }
+@keyframes awbShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
 .editing-row { background:#fff8dc !important; outline:2px solid #ffc107; }
+#search-count { font-size:13px; color:#555; padding:2px 0; min-height:20px; }
 
-/* ── Search count style ── */
-#search-count {
-  font-size: 13px;
-  color: #555;
-  padding: 2px 0;
-  min-height: 20px;
-}
+/* Inline preview table */
+#inlinePreviewSection { animation: slideDown .3s ease; }
+@keyframes slideDown { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+#previewTable thead th { background:#212529; color:#fff; font-size:12px; padding:8px 6px; white-space:nowrap; }
+#previewTable tbody tr:hover td { background:rgba(13,110,253,0.04); }
+#previewTable .preview-input { font-size:12px; padding:3px 6px; height:28px; border-radius:4px; }
+#previewTable .preview-input:focus { border-color:#0d6efd; box-shadow:0 0 0 2px rgba(13,110,253,.15); }
 </style>
 {% endblock %}
