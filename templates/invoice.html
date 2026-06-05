@@ -135,14 +135,14 @@
         {% set ns.sno = ns.sno + 1 %}
         {% set ns.base_total = ns.base_total + (r.total_amount | float) %}
         <tr>
-          <td>{{ ns.sno }}</td>
+          <td class="text-center">{{ ns.sno }}</td>
           {% if loop.first %}
           <td rowspan="{{ group_list | length }}" class="align-middle text-center fw-semibold">
             {% if r.booking_date %}
               {% if r.booking_date is string %}{{ r.booking_date }}
               {% else %}{{ r.booking_date.strftime('%d-%m-%Y') }}{% endif %}
             {% endif %}
-          </td>
+           </td>
           {% endif %}
           <td>{{ r.destination }}</td>
           <td>{{ r.awb_no }}</td>
@@ -176,26 +176,26 @@
 </div>
 
 <script>
+// Updated recalcFuel function – exactly as provided
 function recalcFuel(percent) {
   percent = parseFloat(percent) || 0;
-  const show = percent > 0;
   const sumBase = parseFloat(document.getElementById('sumBase').textContent) || 0;
   const fuelAmount = sumBase * percent / 100;
   const grandTotal = sumBase + fuelAmount;
-
   const fuelSummary = document.getElementById('fuelSummary');
-  if (show) {
+
+  if (percent > 0) {
     fuelSummary.style.display = 'flex';
     document.getElementById('fuelPercent').textContent = percent.toFixed(2);
-    document.getElementById('fuelAmount').textContent = fuelAmount.toFixed(2);
-    document.getElementById('grandTotal').textContent = grandTotal.toFixed(2);
+    document.getElementById('fuelAmount').textContent  = fuelAmount.toFixed(2);
+    document.getElementById('grandTotal').textContent  = grandTotal.toFixed(2);
   } else {
     fuelSummary.style.display = 'none';
   }
 
-  // Update the hidden PDF export field
+  // Always keep PDF hidden field in sync
   const pdfInput = document.getElementById('pdf_fuel_rate');
-  if (pdfInput) pdfInput.value = percent;
+  if (pdfInput) pdfInput.value = percent || 0;
 }
 
 // Auto‑submit when limit dropdown changes

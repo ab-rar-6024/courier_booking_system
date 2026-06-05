@@ -181,7 +181,8 @@
             <thead class="table-dark">
                 <tr><th>#</th><th>Code</th><th>Date</th><th>AWB</th><th>Dest</th><th>Wt</th><th>Courier</th><th>Zone</th><th>Amount</th><th>Action</th></tr>
             </thead>
-            <tbody id="booking-table-body"><tr><td colspan="10" class="text-center">Loading...</td></tr></tbody>
+            <tbody id="booking-table-body"><tr><td colspan="10" class="text-center">Loading......</td></tr>
+            </tbody>
         </table>
     </div>
 </div>
@@ -224,8 +225,9 @@ let destTimer   = null;
 let pendingDest = null;
 let lastRateRow = null;
 let previewData = [];  // holds imported rows
+let isSubmitting = false;   // ⬅️ prevent double submission
 
-const escapeHtml = (s) => { if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); };
+const escapeHtml = (s) => { if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&gt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); };
 const esc = escapeHtml;
 
 function setVal(id, v) { document.getElementById(id).value = v; }
@@ -362,12 +364,12 @@ async function confirmZone(zone) {
 async function loadTable(view) {
   const tbody = document.getElementById('booking-table-body'), loadingDiv = document.getElementById('table-loading');
   loadingDiv.style.display = 'block';
-  tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center">Loading......</td></tr>';
   document.getElementById('searchInput').value = ''; document.getElementById('search-count').textContent = ''; document.getElementById('btn-clear-search').style.display = 'none';
   try {
     const url = view === 'all' ? '/api/bookings?limit=all' : '/api/bookings?limit=10';
     const rows = await fetch(url).then(r => r.json());
-    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" class="text-center">No Records</td></tr>'; document.getElementById('search-count').textContent = 'Showing 0 – 0 of 0 entries'; return; }
+    if (!rows.length) { tbody.innerHTML = '<td><td colspan="10" class="text-center">No Records</td></tr>'; document.getElementById('search-count').textContent = 'Showing 0 – 0 of 0 entries'; return; }
     tbody.innerHTML = rows.map((b,i) => `<tr id="brow-${b.id}"><td>${i+1}</td><td><strong>${esc(b.code)}</strong></td><td>${esc(b.booking_date)}</td><td>${esc(b.awb_no)}</td><td>${esc(b.destination)}</td><td>${b.weight}</td><td>${esc(b.courier)}</td><td>${esc(b.zone)}</td><td>${b.auto_amount}</td><td style="white-space:nowrap"><button class="btn btn-warning btn-act btn-sm" onclick='bkEdit(${JSON.stringify(b)})'><i class="fa fa-pen"></i></button> <button class="btn btn-info btn-act btn-sm text-white" onclick='bkCopy(${JSON.stringify(b)})'><i class="fa fa-copy"></i></button> <button class="btn btn-danger btn-act btn-sm" onclick="deleteBooking(${b.id})"><i class="fa fa-trash"></i></button></td></tr>`).join("");
     filterTable();
   } catch(e) { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Failed to load</td></tr>'; }
@@ -377,8 +379,45 @@ async function loadTable(view) {
 // ---------- DELETE ----------
 async function deleteBooking(id) { if (!confirm('Delete this booking?')) return; const fd = new FormData(); fd.append('_action','delete'); fd.append('del_id', id); await fetch('/booking-entry', { method:'POST', body:fd }); await loadTable(currentView); bkCancel(); }
 
-// ---------- FORM SUBMIT ----------
-document.getElementById('bk-form').addEventListener('submit', async (e) => { e.preventDefault(); const fd = new FormData(e.target); const resp = await fetch('/booking-entry', { method:'POST', body:fd }); if (!resp.ok) { alert('Server error – could not save.'); return; } await loadTable(currentView); bkCancel(); const info = document.getElementById('rate-info'); info.style.color = '#198754'; info.innerHTML = '✓ Saved successfully.'; setTimeout(() => { if (info.innerHTML.includes('Saved')) info.innerHTML = ''; }, 2500); });
+// ---------- FORM SUBMIT (with double-click prevention & auto reset) ----------
+document.getElementById('bk-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (isSubmitting) return;          // already in progress
+  const submitBtn = document.getElementById('bk-submit-btn');
+  const saveSpan = document.getElementById('bk-save-lbl');
+  const originalText = saveSpan.innerText;
+  isSubmitting = true;
+  submitBtn.disabled = true;
+  saveSpan.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
+  
+  try {
+    const fd = new FormData(e.target);
+    const resp = await fetch('/booking-entry', { method:'POST', body:fd });
+    if (!resp.ok) {
+      alert('Server error – could not save.');
+      return;
+    }
+    // Success: reload table and reset form completely
+    await loadTable(currentView);
+    bkCancel();           // clears all fields, zone, rate info, etc.
+    // Small visual feedback: show success message briefly
+    const infoDiv = document.getElementById('rate-info');
+    infoDiv.style.color = '#198754';
+    infoDiv.innerHTML = '✓ Saved successfully. Form cleared for next entry.';
+    setTimeout(() => {
+      if (infoDiv.innerHTML.includes('Saved')) infoDiv.innerHTML = '';
+    }, 2500);
+    // Optionally set focus on code field for quick next entry
+    document.getElementById('bk-code').focus();
+  } catch (err) {
+    console.error(err);
+    alert('Network error – could not save.');
+  } finally {
+    isSubmitting = false;
+    submitBtn.disabled = false;
+    saveSpan.innerHTML = originalText;
+  }
+});
 
 // ---------- VIEW SWITCH ----------
 document.getElementById('btn-show-recent').addEventListener('click', () => { currentView = 'recent'; loadTable('recent'); });
@@ -465,7 +504,7 @@ function onCodeSelect(item) { setVal("bk-code", item.code); const dest = documen
 function onDestACSelect(v) { setVal("bk-dest", v); resolveDestination(v); }
 
 // ============================================================
-// EXCEL IMPORT — INLINE PREVIEW
+// EXCEL IMPORT — INLINE PREVIEW (unchanged)
 // ============================================================
 const importBtn       = document.getElementById('btn-import-excel');
 const hiddenFileInput = document.getElementById('excelFileInput');
@@ -478,22 +517,17 @@ importBtn.addEventListener('click', () => { hiddenFileInput.click(); });
 hiddenFileInput.addEventListener('change', async () => {
     const file = hiddenFileInput.files[0];
     if (!file) return;
-
-    // Reset
     closeInlinePreview();
     progressArea.style.display = 'block';
     importLogDiv.innerHTML = '';
     progressBar.style.width = '0%';
     progressBar.textContent = '0%';
     progressBar.classList.add('progress-bar-animated');
-
     const formData = new FormData();
     formData.append('excel_file', file);
-
     try {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/booking-import', true);
-
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
                 const pct = Math.round((e.loaded / e.total) * 100);
@@ -501,7 +535,6 @@ hiddenFileInput.addEventListener('change', async () => {
                 progressBar.textContent = pct + '%';
             }
         };
-
         xhr.onload = () => {
             progressBar.classList.remove('progress-bar-animated');
             if (xhr.status === 200) {
@@ -509,13 +542,10 @@ hiddenFileInput.addEventListener('change', async () => {
                 if (result.rows && result.rows.length) {
                     previewData = result.rows;
                     renderInlinePreview();
-
-                    // Scroll down to preview
                     setTimeout(() => {
                         document.getElementById('inlinePreviewSection')
                             .scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }, 100);
-
                     if (result.errors && result.errors.length) {
                         importLogDiv.innerHTML = `<div class="alert alert-warning py-1 mb-0">⚠️ ${result.errors.length} warning(s) — rows with no rate are shown with ₹0.00.</div>`;
                     } else {
@@ -531,37 +561,29 @@ hiddenFileInput.addEventListener('change', async () => {
             }
             hiddenFileInput.value = '';
         };
-
         xhr.onerror = () => {
             importLogDiv.innerHTML = `<div class="alert alert-danger py-1 mb-0">❌ Network error</div>`;
         };
-
         xhr.send(formData);
     } catch (err) {
         importLogDiv.innerHTML = `<div class="alert alert-danger py-1 mb-0">❌ ${err.message}</div>`;
     }
 });
 
-// ---------- RENDER INLINE PREVIEW ----------
 function renderInlinePreview() {
     const tbody    = document.getElementById('previewTableBody');
     const errorDiv = document.getElementById('previewError');
     const section  = document.getElementById('inlinePreviewSection');
-
     tbody.innerHTML = '';
     errorDiv.style.display = 'none';
-
     if (!previewData || previewData.length === 0) {
         errorDiv.style.display = 'block';
         errorDiv.innerHTML = 'No valid data to preview.';
         section.style.display = 'block';
         return;
     }
-
     const validCount   = previewData.filter(r => r.valid).length;
     const invalidCount = previewData.length - validCount;
-
-    // Summary bar
     document.getElementById('previewRowCount').textContent = `${previewData.length} rows`;
     document.getElementById('previewSummaryBar').innerHTML = `
         <span class="badge bg-success" style="font-size:13px; padding:6px 12px;">
@@ -574,10 +596,8 @@ function renderInlinePreview() {
             <i class="fa fa-pencil"></i> Click any cell to edit before saving
         </span>
     `;
-
     previewData.forEach((row, idx) => {
         const tr = document.createElement('tr');
-
         if (!row.valid) {
             tr.style.backgroundColor = '#ffebee';
             tr.innerHTML = `
@@ -588,13 +608,11 @@ function renderInlinePreview() {
                 <td class="text-center"><span class="badge bg-danger">❌ Skip</span></td>
             `;
         } else {
-            // Zone badge color
             const zc = ZONE_COLORS[row.zone] || ZONE_COLORS[5];
             const zLabel = ZONE_LABELS[row.zone] || 'ROI';
             const amtStyle = (!row.auto_amount || row.auto_amount == 0)
                 ? 'color:#dc3545; font-weight:bold;'
                 : 'color:#198754; font-weight:bold;';
-
             tr.innerHTML = `
                 <td class="text-center text-muted">${idx+1}</td>
                 <td><input type="text" class="form-control form-control-sm preview-input"
@@ -634,8 +652,6 @@ function renderInlinePreview() {
         }
         tbody.appendChild(tr);
     });
-
-    // Attach change listeners to all inputs/selects
     document.querySelectorAll('.preview-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const idx   = parseInt(input.dataset.idx);
@@ -645,7 +661,6 @@ function renderInlinePreview() {
                 if (field === 'weight' || field === 'auto_amount') val = parseFloat(val) || 0;
                 if (field === 'zone') {
                     val = parseInt(val) || 5;
-                    // Update select background color
                     const zc = ZONE_COLORS[val] || ZONE_COLORS[5];
                     input.style.background = zc.bg;
                     input.style.color = zc.color;
@@ -654,11 +669,9 @@ function renderInlinePreview() {
             }
         });
     });
-
     section.style.display = 'block';
 }
 
-// ---------- CLOSE INLINE PREVIEW ----------
 function closeInlinePreview() {
     document.getElementById('inlinePreviewSection').style.display = 'none';
     document.getElementById('previewTableBody').innerHTML = '';
@@ -666,16 +679,13 @@ function closeInlinePreview() {
     previewData = [];
 }
 
-// ---------- SAVE ALL (both top and bottom buttons) ----------
 async function doSaveAll() {
     const validRows = previewData.filter(r => r.valid);
     if (validRows.length === 0) { alert('No valid rows to save.'); return; }
     if (!confirm(`Save ${validRows.length} booking(s)?`)) return;
-
     const btn1 = document.getElementById('saveAllPreviewBtn');
     const btn2 = document.getElementById('saveAllPreviewBtn2');
     [btn1, btn2].forEach(b => { b.disabled = true; b.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...'; });
-
     try {
         const resp = await fetch('/booking-import-save', {
             method: 'POST',
@@ -690,7 +700,6 @@ async function doSaveAll() {
             if (result.errors.length) console.warn(result.errors);
             closeInlinePreview();
             loadTable(currentView);
-            // Scroll to table
             setTimeout(() => document.querySelector('.card.p-3:last-of-type')
                 .scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
         } else {
@@ -736,8 +745,6 @@ document.addEventListener("DOMContentLoaded", () => {
 @keyframes awbShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
 .editing-row { background:#fff8dc !important; outline:2px solid #ffc107; }
 #search-count { font-size:13px; color:#555; padding:2px 0; min-height:20px; }
-
-/* Inline preview table */
 #inlinePreviewSection { animation: slideDown .3s ease; }
 @keyframes slideDown { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
 #previewTable thead th { background:#212529; color:#fff; font-size:12px; padding:8px 6px; white-space:nowrap; }
