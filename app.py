@@ -40,11 +40,10 @@ def admin_required(f):
     return decorated
 
 # ============================================================
-# LOGIN / LOGOUT  (reads from Supabase app_users table)
+# LOGIN / LOGOUT  (reads from PostgreSQL app_users table)
 # ============================================================
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    # Already logged in → go to dashboard
     if "username" in session:
         return redirect(url_for("dashboard"))
 
@@ -100,7 +99,6 @@ def zone_entry():
     if request.method == "POST":
         action = request.form.get("_action", "add")
 
-        # Block non-admins from edit/delete
         if action in ("edit", "delete") and session.get("role") != "admin":
             db.close()
             return "Access denied: admins only.", 403
@@ -165,7 +163,6 @@ def rate_entry():
     if request.method == "POST":
         action = request.form.get("_action", "add")
 
-        # Server-side guard
         if action in ("edit", "delete") and session.get("role") != "admin":
             db.close()
             return "Access denied: admins only.", 403
@@ -178,13 +175,13 @@ def rate_entry():
             return redirect(url_for('rate_entry', search=search,
                                     limit=limit_str, page=page))
 
-        zone          = int(request.form.get("zone") or 5)
-        code          = request.form.get("code",          "").strip()
-        code_fullform = request.form.get("code_fullform", "").strip()
-        place         = request.form.get("place",         "").strip()
-        rate_250g     = num(request.form.get("rate_250g",     ""))
-        rate_500g     = num(request.form.get("rate_500g",     ""))
-        rate_500g_1   = num(request.form.get("rate_500g_1",   ""))
+        zone            = int(request.form.get("zone") or 5)
+        code            = request.form.get("code",          "").strip()
+        code_fullform   = request.form.get("code_fullform", "").strip()
+        place           = request.form.get("place",         "").strip()
+        rate_250g       = num(request.form.get("rate_250g",     ""))
+        rate_500g       = num(request.form.get("rate_500g",     ""))
+        rate_500g_1     = num(request.form.get("rate_500g_1",   ""))
         rate_1_to_3kg   = num(request.form.get("rate_1_to_3kg",   ""))
         rate_3_to_10kg  = num(request.form.get("rate_3_to_10kg",  ""))
         rate_above_10kg = num(request.form.get("rate_above_10kg", ""))
@@ -218,13 +215,13 @@ def rate_entry():
         return redirect(url_for('rate_entry', search=search,
                                 limit=limit_str, page=1))
 
-    # GET
+    # GET — use ILIKE for case-insensitive search in PostgreSQL
     base_query = "FROM rates"
     params     = []
     if search:
         base_query += " WHERE code ILIKE %s OR code_fullform ILIKE %s OR place ILIKE %s"
-        like    = f"%{search}%"
-        params  = [like, like, like]
+        like   = f"%{search}%"
+        params = [like, like, like]
 
     cursor.execute(f"SELECT COUNT(*) AS total {base_query}", params)
     total = cursor.fetchone()["total"]
@@ -252,31 +249,28 @@ def rate_entry():
         page=page,
         total_pages=total_pages,
         total=total,
-        role=session.get("role")   # ← used in template for admin/user UI
+        role=session.get("role")
     )
 
 # ============================================================
-# BOOKING ENTRY (FIXED HELPER FUNCTIONS)
+# BOOKING ENTRY
 # ============================================================
 @app.route("/booking-entry", methods=["GET", "POST"])
 @login_required
 def booking_entry():
 
     def txt(v):
-        """Convert None or missing field to empty string, otherwise strip and return."""
         if v is None:
             return ""
         return str(v).strip()
 
     def num(v):
-        """Convert empty or None to 0.0, otherwise return float."""
         if v is None:
             return 0.0
         v = str(v).strip()
         return 0.0 if v == "" else float(v)
 
     def to_date(v):
-        """Convert missing, empty, or 'None' string to None (SQL NULL)."""
         if v is None:
             return None
         v = str(v).strip()
@@ -289,7 +283,6 @@ def booking_entry():
         cursor = db.cursor()
         action = request.form.get("_action", "add")
 
-        # Block non-admins from delete/edit
         if action in ("edit", "delete") and session.get("role") != "admin":
             db.close()
             return "Access denied: admins only.", 403
@@ -461,8 +454,8 @@ def booking_import():
 @app.route("/booking-import-save", methods=["POST"])
 @login_required
 def booking_import_save():
-    data     = request.get_json()
-    rows     = data.get("rows", [])
+    data = request.get_json()
+    rows = data.get("rows", [])
     if not rows:
         return jsonify({"success": False, "message": "No data to save"})
 
@@ -601,30 +594,53 @@ def invoice():
 def sales_checking():
     db     = get_db_connection()
     cursor = db.cursor()
-    client_name = request.form.get("client_name")
-    awb_no      = request.form.get("awb_no")
-    destination = request.form.get("destination")
-    from_date   = request.form.get("from_date")
-    to_date     = request.form.get("to_date")
-    query  = """
-        SELECT client_name, awb_no, destination,
-               COUNT(*) AS sum_count, SUM(total_amount) AS amount
-        FROM bookings WHERE 1=1
-    """
-    params = []
-    if client_name: query += " AND client_name LIKE %s";  params.append(f"%{client_name}%")
-    if awb_no:      query += " AND awb_no LIKE %s";       params.append(f"%{awb_no}%")
-    if destination: query += " AND destination LIKE %s";  params.append(f"%{destination}%")
-    if from_date and to_date:
-        query += " AND booking_date BETWEEN %s AND %s";   params.extend([from_date, to_date])
-    query += " GROUP BY client_name, awb_no, destination ORDER BY client_name"
-    cursor.execute(query, params)
-    rows         = [dict(r) for r in cursor.fetchall()]
-    total_amount = sum(r["amount"] for r in rows) if rows else 0
+
+    show_results = (request.method == "POST")
+
+    client_name = request.form.get("client_name", "").strip()
+    awb_no      = request.form.get("awb_no", "").strip()
+    destination = request.form.get("destination", "").strip()
+    from_date   = request.form.get("from_date", "").strip()
+    to_date     = request.form.get("to_date", "").strip()
+
+    rows         = []
+    total_amount = 0
+
+    if show_results:
+        query = """
+            SELECT client_name, awb_no, destination,
+                   COUNT(*) AS sum_count, SUM(total_amount) AS amount
+            FROM bookings WHERE 1=1
+        """
+        params = []
+
+        if client_name:
+            query += " AND client_name ILIKE %s"
+            params.append(f"%{client_name}%")
+        if awb_no:
+            query += " AND awb_no ILIKE %s"
+            params.append(f"%{awb_no}%")
+        if destination:
+            query += " AND destination ILIKE %s"
+            params.append(f"%{destination}%")
+        if from_date and to_date:
+            query += " AND booking_date BETWEEN %s AND %s"
+            params.extend([from_date, to_date])
+
+        query += " GROUP BY client_name, awb_no, destination ORDER BY client_name"
+        cursor.execute(query, params)
+        rows         = [dict(r) for r in cursor.fetchall()]
+        total_amount = sum(r["amount"] for r in rows) if rows else 0
+
     db.close()
-    return render_template("sales_checking.html", rows=rows,
-                           total_amount=total_amount, filters=request.form,
-                           role=session.get("role"))
+    return render_template(
+        "sales_checking.html",
+        rows=rows,
+        total_amount=total_amount,
+        filters=request.form,
+        show_results=show_results,
+        role=session.get("role")
+    )
 
 # ============================================================
 # DAY WISE
@@ -644,12 +660,14 @@ def day_wise():
         db.commit()
         db.close()
         return redirect("/day-wise")
+
     from_date = request.form.get("from_date")
     to_date   = request.form.get("to_date")
     query     = "SELECT * FROM day_wise WHERE 1=1"
     params    = []
     if from_date and to_date:
-        query += " AND entry_date BETWEEN %s AND %s"; params.extend([from_date, to_date])
+        query += " AND entry_date BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
     query += " ORDER BY entry_date"
     cursor.execute(query, params)
     rows         = [dict(r) for r in cursor.fetchall()]
@@ -675,10 +693,10 @@ def day_book():
     destination = request.form.get("destination")
     query  = "SELECT weight, awb_no, destination, total_amount FROM bookings WHERE 1=1"
     params = []
-    if entry_date:  query += " AND booking_date = %s";    params.append(entry_date)
-    if weight:      query += " AND weight = %s";          params.append(weight)
-    if awb_no:      query += " AND awb_no LIKE %s";       params.append(f"%{awb_no}%")
-    if destination: query += " AND destination LIKE %s";  params.append(f"%{destination}%")
+    if entry_date:  query += " AND booking_date = %s";       params.append(entry_date)
+    if weight:      query += " AND weight = %s";             params.append(weight)
+    if awb_no:      query += " AND awb_no ILIKE %s";         params.append(f"%{awb_no}%")
+    if destination: query += " AND destination ILIKE %s";    params.append(f"%{destination}%")
     query += " ORDER BY awb_no"
     cursor.execute(query, params)
     rows      = [dict(r) for r in cursor.fetchall()]
@@ -699,14 +717,12 @@ def invoice_export():
     cursor = db.cursor()
     try:    fuel_rate = float(request.form.get("fuel_rate", 0))
     except: fuel_rate = 0.0
-<<<<<<< HEAD
 
     from_date = request.form.get("from_date", "")
     to_date   = request.form.get("to_date", "")
     code      = request.form.get("code", "ALL")
 
-=======
->>>>>>> b4ec5de34c577cd189bc80a0bfbefbaac459f1bb
+    # PostgreSQL uses double-quoted aliases
     query  = """SELECT booking_date AS "DATE", destination AS "DESTINATION",
                        awb_no AS "AWB NO", weight AS "WEIGHT",
                        total_amount AS "Total"
@@ -714,54 +730,54 @@ def invoice_export():
     params = []
     if from_date and to_date:
         query += " AND booking_date BETWEEN %s AND %s"
-<<<<<<< HEAD
         params.extend([from_date, to_date])
     if code and code != "ALL":
-        query += " AND code=%s"; params.append(code)
-=======
-        params.extend([request.form["from_date"], request.form["to_date"]])
-    if request.form.get("code") and request.form["code"] != "ALL":
-        query += " AND code=%s"; params.append(request.form["code"])
->>>>>>> b4ec5de34c577cd189bc80a0bfbefbaac459f1bb
+        query += " AND code=%s"
+        params.append(code)
     query += " ORDER BY booking_date"
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
+
     if fuel_rate > 0 and not df.empty:
         df['Fuel']        = (df['Total'].astype(float) * fuel_rate / 100).round(2)
         df['Grand Total'] = (df['Total'].astype(float) + df['Fuel']).round(2)
-    output = io.BytesIO()
 
+    output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Write header info starting at row 0
         info_df = pd.DataFrame([
-            ["Company Name:", "Professional Couriers"],
+            ["Company Name:",       "Professional Couriers"],
             ["Transaction Period:", f"{from_date} to {to_date}"],
-            ["Customer Code:", code],
+            ["Customer Code:",      code],
+            ["", ""],
         ])
         info_df.to_excel(writer, index=False, header=False, sheet_name="Invoice", startrow=0)
-
-        # Write actual data below header (leave 1 blank row gap)
         df.to_excel(writer, index=False, sheet_name="Invoice", startrow=5)
-
     output.seek(0)
     db.close()
     return send_file(output, as_attachment=True, download_name="Invoice_Statement.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
+
 @app.route("/zone-export")
 @admin_required
 def zone_export():
-    db = get_db_connection(); cursor = db.cursor()
+    db = get_db_connection()
+    cursor = db.cursor()
     cursor.execute("SELECT district, rate_zone FROM zones")
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
-    output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0); db.close()
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    db.close()
     return send_file(output, as_attachment=True, download_name="Zone_Data.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 
 @app.route("/rate-export")
 @admin_required
 def rate_export():
-    db = get_db_connection(); cursor = db.cursor()
+    db = get_db_connection()
+    cursor = db.cursor()
     cursor.execute("""
         SELECT code AS "CODE", code_fullform AS "CODE FULL FORM",
                place AS "PLACE", zone AS "ZONE",
@@ -772,14 +788,19 @@ def rate_export():
         FROM rates ORDER BY zone, code
     """)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
-    output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0); db.close()
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    db.close()
     return send_file(output, as_attachment=True, download_name="Rate_Entry.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 
 @app.route("/booking-export")
 @admin_required
 def booking_export():
-    db = get_db_connection(); cursor = db.cursor()
+    db = get_db_connection()
+    cursor = db.cursor()
     cursor.execute("""
         SELECT code AS "CODE", booking_date AS "DATE", awb_no AS "AWB NO",
                destination AS "DESTINATION", weight AS "WEIGHT", courier AS "COURIER",
@@ -789,63 +810,89 @@ def booking_export():
         FROM bookings
     """)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
-    output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0); db.close()
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    db.close()
     return send_file(output, as_attachment=True, download_name="Booking_Data.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 
 @app.route("/sales-export", methods=["POST"])
 @admin_required
 def sales_export():
-    db = get_db_connection(); cursor = db.cursor()
+    db     = get_db_connection()
+    cursor = db.cursor()
     query  = """SELECT client_name AS "Client Name", awb_no AS "AWB No",
                        destination AS "Destination", COUNT(*) AS "Sum",
                        SUM(total_amount) AS "Amount"
                 FROM bookings WHERE 1=1"""
     params = []
-    if request.form.get("client_name"): query += " AND client_name LIKE %s"; params.append(f"%{request.form['client_name']}%")
-    if request.form.get("awb_no"):      query += " AND awb_no LIKE %s";      params.append(f"%{request.form['awb_no']}%")
-    if request.form.get("destination"): query += " AND destination LIKE %s"; params.append(f"%{request.form['destination']}%")
+    if request.form.get("client_name"):
+        query += " AND client_name ILIKE %s"
+        params.append(f"%{request.form['client_name']}%")
+    if request.form.get("awb_no"):
+        query += " AND awb_no ILIKE %s"
+        params.append(f"%{request.form['awb_no']}%")
+    if request.form.get("destination"):
+        query += " AND destination ILIKE %s"
+        params.append(f"%{request.form['destination']}%")
     if request.form.get("from_date") and request.form.get("to_date"):
-        query += " AND booking_date BETWEEN %s AND %s"; params.extend([request.form["from_date"], request.form["to_date"]])
+        query += " AND booking_date BETWEEN %s AND %s"
+        params.extend([request.form["from_date"], request.form["to_date"]])
     query += " GROUP BY client_name, awb_no, destination"
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
-    output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0); db.close()
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    db.close()
     return send_file(output, as_attachment=True, download_name="Sales_Checking.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 
 @app.route("/day-wise-export", methods=["POST"])
 @admin_required
 def day_wise_export():
-    db = get_db_connection(); cursor = db.cursor()
+    db = get_db_connection()
+    cursor = db.cursor()
     query  = """SELECT entry_date AS "DATE", total_weight AS "Total Weight",
                        total_sales AS "Total Sales Amount"
                 FROM day_wise WHERE 1=1"""
     params = []
     if request.form.get("from_date") and request.form.get("to_date"):
-        query += " AND entry_date BETWEEN %s AND %s"; params.extend([request.form["from_date"], request.form["to_date"]])
+        query += " AND entry_date BETWEEN %s AND %s"
+        params.extend([request.form["from_date"], request.form["to_date"]])
     query += " ORDER BY entry_date"
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
-    output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0); db.close()
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    db.close()
     return send_file(output, as_attachment=True, download_name="Day_Wise_Manual.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 
 @app.route("/day-book-export", methods=["POST"])
 @admin_required
 def day_book_export():
-    db = get_db_connection(); cursor = db.cursor()
+    db = get_db_connection()
+    cursor = db.cursor()
     query  = """SELECT weight AS "WEIGHT", awb_no AS "AWB NO",
                        destination AS "DESTINATION", total_amount AS "Total"
                 FROM bookings WHERE 1=1"""
     params = []
-    if request.form.get("entry_date"):  query += " AND booking_date = %s"; params.append(request.form["entry_date"])
-    if request.form.get("weight"):      query += " AND weight = %s";       params.append(request.form["weight"])
-    if request.form.get("awb_no"):      query += " AND awb_no LIKE %s";    params.append(f"%{request.form['awb_no']}%")
-    if request.form.get("destination"): query += " AND destination LIKE %s"; params.append(f"%{request.form['destination']}%")
+    if request.form.get("entry_date"):  query += " AND booking_date = %s";    params.append(request.form["entry_date"])
+    if request.form.get("weight"):      query += " AND weight = %s";          params.append(request.form["weight"])
+    if request.form.get("awb_no"):      query += " AND awb_no ILIKE %s";      params.append(f"%{request.form['awb_no']}%")
+    if request.form.get("destination"): query += " AND destination ILIKE %s"; params.append(f"%{request.form['destination']}%")
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
-    output = io.BytesIO(); df.to_excel(output, index=False); output.seek(0); db.close()
+    output = io.BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    db.close()
     return send_file(output, as_attachment=True, download_name="Day_Book.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -867,127 +914,267 @@ class WatermarkDocTemplate(SimpleDocTemplate):
         self.canv.drawCentredString(0, 0, self.watermark_text)
         self.canv.restoreState()
 
+
 @app.route("/invoice-pdf", methods=["POST"])
 @login_required
 def invoice_pdf():
+    def s(v):
+        return '' if v is None else str(v)
+
     db     = get_db_connection()
     cursor = db.cursor()
-    from_date = request.form.get("from_date")
-    to_date   = request.form.get("to_date")
-    code      = request.form.get("code")
-    try:    fuel_percent = float(request.form.get("fuel_rate", 0))
-    except: fuel_percent = 0.0
+    from_date    = request.form.get("from_date", "").strip()
+    to_date      = request.form.get("to_date", "").strip()
+    code         = request.form.get("code", "").strip()
+    try:
+        fuel_percent = float(request.form.get("fuel_rate", 0) or 0)
+    except:
+        fuel_percent = 0.0
+
+    filter_code = None if (not code or code == "ALL") else code
 
     query  = "SELECT booking_date, destination, awb_no, weight, total_amount FROM bookings WHERE booking_date IS NOT NULL"
     params = []
     if from_date and to_date:
-        query += " AND booking_date BETWEEN %s AND %s"; params.extend([from_date, to_date])
-    if code and code != "ALL":
-        query += " AND code=%s"; params.append(code)
+        query += " AND booking_date BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
+    if filter_code:
+        query += " AND code = %s"
+        params.append(filter_code)
     query += " ORDER BY booking_date"
     cursor.execute(query, params)
     rows = [dict(r) for r in cursor.fetchall()]
     db.close()
 
+    if not rows:
+        return "<h3 style='font-family:sans-serif;padding:2rem'>No records found for the selected filters.</h3>", 200
+
     buf = io.BytesIO()
     doc = WatermarkDocTemplate(buf, pagesize=A4,
                                leftMargin=10*mm, rightMargin=10*mm,
                                topMargin=12*mm, bottomMargin=12*mm)
-    styles      = getSampleStyleSheet()
-    title_style = ParagraphStyle('title', fontSize=13, alignment=TA_CENTER, spaceAfter=4, fontName='Helvetica-Bold')
-    sub_style   = ParagraphStyle('sub',   fontSize=9,  alignment=TA_CENTER, spaceAfter=8, textColor=colors.grey)
 
-    elements   = []
-<<<<<<< HEAD
+    title_style = ParagraphStyle('title', fontSize=13, alignment=TA_CENTER,
+                                 spaceAfter=4, fontName='Helvetica-Bold')
+    sub_style   = ParagraphStyle('sub',   fontSize=9,  alignment=TA_CENTER,
+                                 spaceAfter=8, textColor=colors.grey)
 
-    # Company Name
+    elements = []
     elements.append(Paragraph("Professional Couriers", title_style))
-
-    # Transaction Period
+    title_text = "Invoice / Statement"
+    if filter_code:
+        title_text += f"  -  {filter_code}"
+    elements.append(Paragraph(title_text, title_style))
     if from_date and to_date:
         elements.append(Paragraph(f"Transaction Period: {from_date}  to  {to_date}", sub_style))
-
-    # Invoice title + code
-    title_text = "Invoice / Statement"
-    if code and code != "ALL": title_text += f"  —  {code}"
-    elements.append(Paragraph(title_text, title_style))
-
     if fuel_percent > 0:
         elements.append(Paragraph(f"Fuel Surcharge: {fuel_percent:.2f}%", sub_style))
-
-=======
-    title_text = "Invoice / Statement"
-    if code and code != "ALL": title_text += f"  —  {code}"
-    elements.append(Paragraph(title_text, title_style))
-    if from_date and to_date:  elements.append(Paragraph(f"{from_date}  to  {to_date}", sub_style))
-    if fuel_percent > 0:       elements.append(Paragraph(f"Fuel Surcharge: {fuel_percent:.2f}%", sub_style))
->>>>>>> b4ec5de34c577cd189bc80a0bfbefbaac459f1bb
     elements.append(Spacer(1, 4*mm))
 
-    header     = ['SNO', 'DATE', 'DESTINATION', 'AWB NO', 'WEIGHT', 'Total']
-    col_widths = [20*mm, 28*mm, 55*mm, 50*mm, 22*mm, 25*mm]
-    data       = [header]
-    span_cmds  = []
-    row_idx = 1; sno = 0; sum_base = 0.0
+    header      = ['SNO', 'DATE', 'DESTINATION', 'AWB NO', 'WEIGHT', 'Total']
+    col_widths  = [20*mm, 28*mm, 55*mm, 50*mm, 22*mm, 25*mm]
+    ROW_H       = 6*mm
+    HEADER_H    = 8*mm
+
+    data        = [header]
+    row_heights = [HEADER_H]
+    style_cmds  = []
+    row_idx     = 1
+    sno         = 0
+    sum_base    = 0.0
 
     for date_val, grp in groupby(rows, key=itemgetter("booking_date")):
         grp      = list(grp)
         date_str = date_val.strftime('%d-%m-%Y') if hasattr(date_val, 'strftime') else str(date_val)
         first    = True
         for r in grp:
-            sno     += 1
-            base     = float(r["total_amount"])
+            sno      += 1
+            base      = float(r["total_amount"] or 0)
             sum_base += base
-            data.append([str(sno), date_str if first else '',
-                         r["destination"] or '', str(r["awb_no"]),
-                         f"{float(r['weight']):.3f}", f"{base:.2f}"])
-            first   = False
+            bg = colors.white if (row_idx % 2 == 1) else colors.HexColor('#f8f9fa')
+            style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), bg))
+            data.append([
+                str(sno),
+                date_str if first else '',
+                s(r["destination"]),
+                s(r["awb_no"]),
+                f"{float(r['weight'] or 0):.3f}",
+                f"{base:.2f}"
+            ])
+            row_heights.append(ROW_H)
+            first    = False
             row_idx += 1
-        if len(grp) > 1:
-            start = row_idx - len(grp); end = row_idx - 1
-            span_cmds.extend([('SPAN', (1,start), (1,end)), ('VALIGN', (1,start), (1,end), 'MIDDLE')])
 
     if fuel_percent > 0:
         fuel_total  = sum_base * fuel_percent / 100
         grand_total = sum_base + fuel_total
-        data.extend([['','','','','Total:', f"{sum_base:.2f}"],
-                     ['','','','','Fuel Surcharge:', f"{fuel_total:.2f}"],
-                     ['','','','','Grand Total:', f"{grand_total:.2f}"]])
+        summary_rows = [
+            ['', '', '', '', 'Total:',          f"{sum_base:.2f}"],
+            ['', '', '', '', 'Fuel Surcharge:', f"{fuel_total:.2f}"],
+            ['', '', '', '', 'Grand Total:',    f"{grand_total:.2f}"],
+        ]
     else:
-        data.append(['','','','','Total:', f"{sum_base:.2f}"])
+        summary_rows = [
+            ['', '', '', '', 'Total:', f"{sum_base:.2f}"],
+        ]
+
+    for sr in summary_rows:
+        data.append(sr)
+        row_heights.append(ROW_H)
+
     total_rows = len(data)
 
-    t = Table(data, colWidths=col_widths, repeatRows=1)
-    style_cmds = [
-        ('BACKGROUND',    (0,0), (-1,0),  colors.HexColor('#212529')),
-        ('TEXTCOLOR',     (0,0), (-1,0),  colors.white),
-        ('FONTNAME',      (0,0), (-1,0),  'Helvetica-Bold'),
-        ('FONTSIZE',      (0,0), (-1,0),  8),
-        ('ALIGN',         (0,0), (-1,0),  'CENTER'),
-        ('BOTTOMPADDING', (0,0), (-1,0),  5),
-        ('TOPPADDING',    (0,0), (-1,0),  5),
-        ('FONTSIZE',      (0,1), (-1,-1), 8),
-        ('FONTNAME',      (0,1), (-1,-1), 'Helvetica'),
-        ('GRID',          (0,0), (-1,-2), 0.4, colors.grey),
-        ('ROWBACKGROUNDS',(0,1), (-1,-2), [colors.white, colors.HexColor('#f8f9fa')]),
-        ('ALIGN',         (4,1), (-1,-2), 'RIGHT'),
-        ('ALIGN',         (1,1), (1,-2),  'CENTER'),
-        ('TOPPADDING',    (0,1), (-1,-2), 3),
-        ('BOTTOMPADDING', (0,1), (-1,-2), 3),
-        ('FONTNAME',      (0, total_rows-1), (-1,-1), 'Helvetica-Bold'),
-        ('BACKGROUND',    (0, total_rows-1), (-1,-1), colors.HexColor('#e9ecef')),
-        ('LINEABOVE',     (0, total_rows-1), (-1, total_rows-1), 1, colors.black),
-        ('BOX',           (0,0), (-1,-1), 0.8, colors.black),
+    base_cmds = [
+        ('BACKGROUND',    (0, 0),  (-1, 0),  colors.HexColor('#212529')),
+        ('TEXTCOLOR',     (0, 0),  (-1, 0),  colors.white),
+        ('FONTNAME',      (0, 0),  (-1, 0),  'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0),  (-1, 0),  8),
+        ('ALIGN',         (0, 0),  (-1, 0),  'CENTER'),
+        ('VALIGN',        (0, 0),  (-1, 0),  'MIDDLE'),
+        ('TOPPADDING',    (0, 0),  (-1, 0),  4),
+        ('BOTTOMPADDING', (0, 0),  (-1, 0),  4),
+        ('FONTSIZE',      (0, 1),  (-1, -1), 8),
+        ('FONTNAME',      (0, 1),  (-1, -1), 'Helvetica'),
+        ('VALIGN',        (0, 1),  (-1, -1), 'MIDDLE'),
+        ('TOPPADDING',    (0, 1),  (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 1),  (-1, -1), 2),
+        ('GRID',          (0, 0),  (-1, total_rows - len(summary_rows) - 1), 0.4, colors.grey),
+        ('ALIGN',         (4, 1),  (-1, -1), 'RIGHT'),
+        ('ALIGN',         (0, 1),  (0, -1),  'CENTER'),
+        ('ALIGN',         (1, 1),  (1, -1),  'CENTER'),
+        ('BOX',           (0, 0),  (-1, -1), 0.8, colors.black),
+        ('LINEABOVE',     (0, total_rows - len(summary_rows)),
+                          (-1, total_rows - len(summary_rows)), 1.2, colors.black),
     ]
-    if fuel_percent > 0:
-        style_cmds.append(('LINEABOVE', (0, total_rows-2), (-1, total_rows-2), 1, colors.black))
-    style_cmds.extend(span_cmds)
-    t.setStyle(TableStyle(style_cmds))
+
+    for i in range(len(summary_rows)):
+        r = total_rows - len(summary_rows) + i
+        base_cmds.extend([
+            ('BACKGROUND', (0, r), (-1, r), colors.HexColor('#e9ecef')),
+            ('FONTNAME',   (0, r), (-1, r), 'Helvetica-Bold'),
+        ])
+
+    t = Table(data, colWidths=col_widths, rowHeights=row_heights)
+    t.setStyle(TableStyle(base_cmds + style_cmds))
     elements.append(t)
     doc.build(elements)
     buf.seek(0)
+
+    fname = f"Invoice_{filter_code or 'ALL'}"
+    if from_date and to_date:
+        fname += f"_{from_date}_to_{to_date}"
+    fname += ".pdf"
+
+    return send_file(buf, as_attachment=True, download_name=fname,
+                     mimetype='application/pdf')
+
+# ============================================================
+# SALES PDF
+# ============================================================
+@app.route("/sales-pdf", methods=["POST"])
+@login_required
+def sales_pdf():
+    db     = get_db_connection()
+    cursor = db.cursor()
+
+    client_name = request.form.get("client_name", "").strip()
+    awb_no      = request.form.get("awb_no", "").strip()
+    destination = request.form.get("destination", "").strip()
+    from_date   = request.form.get("from_date", "").strip()
+    to_date     = request.form.get("to_date", "").strip()
+
+    query = """
+        SELECT client_name, awb_no, destination,
+               COUNT(*) AS sum_count, SUM(total_amount) AS amount
+        FROM bookings WHERE 1=1
+    """
+    params = []
+    if client_name:
+        query += " AND client_name ILIKE %s"
+        params.append(f"%{client_name}%")
+    if awb_no:
+        query += " AND awb_no ILIKE %s"
+        params.append(f"%{awb_no}%")
+    if destination:
+        query += " AND destination ILIKE %s"
+        params.append(f"%{destination}%")
+    if from_date and to_date:
+        query += " AND booking_date BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
+
+    query += " GROUP BY client_name, awb_no, destination ORDER BY client_name"
+    cursor.execute(query, params)
+    rows         = [dict(r) for r in cursor.fetchall()]
+    total_amount = sum(r["amount"] for r in rows) if rows else 0
+    db.close()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=20, rightMargin=20,
+                            topMargin=30, bottomMargin=20)
+
+    styles       = getSampleStyleSheet()
+    title_style  = ParagraphStyle('Title', parent=styles['Heading1'],
+                                  alignment=TA_CENTER, spaceAfter=10)
+    normal_style = styles['Normal']
+    name_style   = ParagraphStyle('NameStyle', parent=styles['Normal'],
+                                  fontSize=9, leading=11)
+
+    elements = []
+    elements.append(Paragraph("Sales Checking Report", title_style))
+
+    filter_text = []
+    if client_name: filter_text.append(f"Client: {client_name}")
+    if awb_no:      filter_text.append(f"AWB: {awb_no}")
+    if destination: filter_text.append(f"Destination: {destination}")
+    if from_date and to_date: filter_text.append(f"Period: {from_date} to {to_date}")
+    if filter_text:
+        elements.append(Paragraph(" | ".join(filter_text), normal_style))
+    elements.append(Spacer(1, 12))
+
+    header = ['SNO', 'Client Name', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
+    data   = [header]
+
+    for i, row in enumerate(rows, start=1):
+        data.append([
+            str(i),
+            Paragraph(row['client_name'] or '', name_style),
+            row['awb_no'] or '',
+            row['destination'] or '',
+            str(row['sum_count']),
+            f"{row['amount']:.2f}"
+        ])
+
+    data.append(['', '', '', '', 'Total:', f"{total_amount:.2f}"])
+
+    col_widths = [30, 140, 90, 130, 45, 70]
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0),  (-1, 0),  colors.grey),
+        ('TEXTCOLOR',     (0, 0),  (-1, 0),  colors.whitesmoke),
+        ('ALIGN',         (0, 0),  (-1, 0),  'CENTER'),
+        ('FONTNAME',      (0, 0),  (-1, 0),  'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0),  (-1, 0),  10),
+        ('BOTTOMPADDING', (0, 0),  (-1, 0),  6),
+        ('BACKGROUND',    (0, 1),  (-1, -2), colors.beige),
+        ('FONTNAME',      (0, 1),  (-1, -1), 'Helvetica'),
+        ('FONTSIZE',      (0, 1),  (-1, -1), 9),
+        ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),
+        ('ALIGN',         (4, 1),  (5,  -1), 'RIGHT'),
+        ('VALIGN',        (0, 0),  (-1, -1), 'MIDDLE'),
+        ('GRID',          (0, 0),  (-1, -2), 0.5, colors.grey),
+        ('LINEABOVE',     (0, -1), (-1, -1), 1,   colors.black),
+        ('BACKGROUND',    (0, -1), (-1, -1), colors.lavender),
+        ('FONTNAME',      (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('ALIGN',         (4, -1), (5,  -1), 'RIGHT'),
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+    buf.seek(0)
+
     return send_file(buf, as_attachment=True,
-                     download_name=f"Invoice_{code or 'ALL'}_{from_date or ''}_{to_date or ''}.pdf",
+                     download_name="Sales_Checking_Report.pdf",
                      mimetype='application/pdf')
 
 # ============================================================
@@ -996,15 +1183,18 @@ def invoice_pdf():
 @app.route("/day-book/filter")
 @login_required
 def day_book_filter():
-    db = get_db_connection(); cursor = db.cursor()
-    entry_date = request.args.get("entry_date",""); weight = request.args.get("weight","")
-    awb_no = request.args.get("awb_no",""); destination = request.args.get("destination","")
-    query = "SELECT weight, awb_no, destination, total_amount FROM bookings WHERE 1=1"
+    db = get_db_connection()
+    cursor = db.cursor()
+    entry_date  = request.args.get("entry_date", "")
+    weight      = request.args.get("weight", "")
+    awb_no      = request.args.get("awb_no", "")
+    destination = request.args.get("destination", "")
+    query  = "SELECT weight, awb_no, destination, total_amount FROM bookings WHERE 1=1"
     params = []
-    if entry_date:  query += " AND booking_date = %s"; params.append(entry_date)
-    if weight:      query += " AND weight = %s";       params.append(float(weight))
-    if awb_no:      query += " AND awb_no LIKE %s";    params.append(f"%{awb_no}%")
-    if destination: query += " AND destination LIKE %s"; params.append(f"%{destination}%")
+    if entry_date:  query += " AND booking_date = %s";       params.append(entry_date)
+    if weight:      query += " AND weight = %s";             params.append(float(weight))
+    if awb_no:      query += " AND awb_no ILIKE %s";         params.append(f"%{awb_no}%")
+    if destination: query += " AND destination ILIKE %s";    params.append(f"%{destination}%")
     query += " ORDER BY awb_no"
     cursor.execute(query, params)
     rows      = [dict(r) for r in cursor.fetchall()]
@@ -1012,210 +1202,272 @@ def day_book_filter():
     db.close()
     return jsonify({"rows": rows, "total_sum": float(total_sum)})
 
+
 @app.route("/api/ac/code")
 def api_ac_code():
-    q = request.args.get("q","").strip()
+    q = request.args.get("q", "").strip()
     if not q: return jsonify([])
-    db = get_db_connection(); cur = db.cursor()
-    cur.execute("SELECT DISTINCT code, code_fullform FROM rates WHERE code LIKE %s OR code_fullform LIKE %s LIMIT 10",
-                (f"{q}%", f"%{q}%"))
-    rows = [dict(r) for r in cur.fetchall()]; db.close()
+    db = get_db_connection()
+    cur = db.cursor()
+    cur.execute(
+        "SELECT DISTINCT code, code_fullform FROM rates WHERE code ILIKE %s OR code_fullform ILIKE %s LIMIT 10",
+        (f"{q}%", f"%{q}%")
+    )
+    rows = [dict(r) for r in cur.fetchall()]
+    db.close()
     return jsonify(rows)
+
 
 @app.route("/api/ac/place")
 def api_ac_place():
-    q = request.args.get("q","").strip()
+    q = request.args.get("q", "").strip()
     if not q: return jsonify([])
-    db = get_db_connection(); cur = db.cursor()
-    cur.execute("SELECT DISTINCT place FROM rates WHERE place LIKE %s ORDER BY place LIMIT 12", (f"{q}%",))
-    rows = cur.fetchall(); db.close()
+    db = get_db_connection()
+    cur = db.cursor()
+    cur.execute("SELECT DISTINCT place FROM rates WHERE place ILIKE %s ORDER BY place LIMIT 12", (f"{q}%",))
+    rows = cur.fetchall()
+    db.close()
     return jsonify([r["place"] for r in rows])
+
 
 @app.route("/api/ac/zone")
 def api_ac_zone():
-    q = request.args.get("q","").strip()
+    q = request.args.get("q", "").strip()
     if not q: return jsonify([])
-    db = get_db_connection(); cur = db.cursor()
-    cur.execute("SELECT DISTINCT place FROM rates WHERE place LIKE %s ORDER BY place LIMIT 12", (f"{q}%",))
-    rows = cur.fetchall(); db.close()
+    db = get_db_connection()
+    cur = db.cursor()
+    cur.execute("SELECT DISTINCT place FROM rates WHERE place ILIKE %s ORDER BY place LIMIT 12", (f"{q}%",))
+    rows = cur.fetchall()
+    db.close()
     return jsonify([r["place"] for r in rows])
+
 
 @app.route("/api/ac/destination")
 def api_ac_destination():
-    q = request.args.get("q","").strip()
+    q = request.args.get("q", "").strip()
     if not q: return jsonify([])
-    db = get_db_connection(); cur = db.cursor()
-    cur.execute("SELECT DISTINCT destination FROM bookings WHERE destination LIKE %s LIMIT 12", (f"{q}%",))
-    rows = cur.fetchall(); db.close()
+    db = get_db_connection()
+    cur = db.cursor()
+    cur.execute("SELECT DISTINCT destination FROM bookings WHERE destination ILIKE %s LIMIT 12", (f"{q}%",))
+    rows = cur.fetchall()
+    db.close()
     return jsonify([r["destination"] for r in rows if r["destination"]])
+
 
 @app.route("/api/ac/client")
 def api_ac_client():
-    q = request.args.get("q","").strip()
+    q = request.args.get("q", "").strip()
     if not q: return jsonify([])
-    db = get_db_connection(); cur = db.cursor()
-    cur.execute("SELECT DISTINCT client_name FROM bookings WHERE client_name LIKE %s LIMIT 10", (f"%{q}%",))
-    rows = cur.fetchall(); db.close()
+    db = get_db_connection()
+    cur = db.cursor()
+    cur.execute("SELECT DISTINCT client_name FROM bookings WHERE client_name ILIKE %s LIMIT 10", (f"%{q}%",))
+    rows = cur.fetchall()
+    db.close()
     return jsonify([r["client_name"] for r in rows if r["client_name"]])
+
 
 @app.route("/api/rate/lookup")
 def api_rate_lookup():
-    code = request.args.get("code","").strip().upper()
-    zone_str = request.args.get("zone","").strip()
+    code     = request.args.get("code", "").strip().upper()
+    zone_str = request.args.get("zone", "").strip()
     if not code or not zone_str: return jsonify({})
-    try:   zone = int(zone_str)
+    try:    zone = int(zone_str)
     except: return jsonify({})
-    db = get_db_connection(); cur = db.cursor()
+    db = get_db_connection()
+    cur = db.cursor()
     cur.execute("SELECT * FROM rates WHERE UPPER(code)=%s AND zone=%s LIMIT 1", (code, zone))
-    row = cur.fetchone(); db.close()
+    row = cur.fetchone()
+    db.close()
     return jsonify(dict(row) if row else {})
+
 
 @app.route("/api/ac/awb_check")
 def api_awb_check():
-    awb = request.args.get("awb","").strip(); edit_id = request.args.get("edit_id","").strip()
+    awb     = request.args.get("awb", "").strip()
+    edit_id = request.args.get("edit_id", "").strip()
     if not awb: return jsonify({"exists": False})
-    db = get_db_connection(); cur = db.cursor()
+    db  = get_db_connection()
+    cur = db.cursor()
     if edit_id:
-        cur.execute("SELECT id, code, booking_date, destination FROM bookings WHERE awb_no=%s AND id!=%s LIMIT 1", (awb, edit_id))
+        cur.execute(
+            "SELECT id, code, booking_date, destination FROM bookings WHERE awb_no=%s AND id!=%s LIMIT 1",
+            (awb, edit_id)
+        )
     else:
-        cur.execute("SELECT id, code, booking_date, destination FROM bookings WHERE awb_no=%s LIMIT 1", (awb,))
-    row = cur.fetchone(); db.close()
+        cur.execute(
+            "SELECT id, code, booking_date, destination FROM bookings WHERE awb_no=%s LIMIT 1",
+            (awb,)
+        )
+    row = cur.fetchone()
+    db.close()
     if row:
         return jsonify({"exists": True, "code": row["code"],
                         "date": str(row["booking_date"]), "dest": row["destination"]})
     return jsonify({"exists": False})
 
+
 @app.route("/api/place/save-zone", methods=["POST"])
 @login_required
 def api_place_save_zone():
-    data = request.get_json()
-    place = data.get("place","").strip().upper()
-    zone  = int(data.get("zone", 5))
-    place_code = data.get("place_code","").strip().upper() or None
+    data       = request.get_json()
+    place      = data.get("place", "").strip().upper()
+    zone       = int(data.get("zone", 5))
+    place_code = data.get("place_code", "").strip().upper() or None
     if not place: return jsonify({"ok": False})
-    db = get_db_connection(); cur = db.cursor()
+    db  = get_db_connection()
+    cur = db.cursor()
+    # PostgreSQL upsert syntax
     cur.execute("""
         INSERT INTO place_zones (place, zone, place_code) VALUES (%s,%s,%s)
         ON CONFLICT (place) DO UPDATE SET
             zone = EXCLUDED.zone,
             place_code = COALESCE(EXCLUDED.place_code, place_zones.place_code)
     """, (place, zone, place_code))
-    db.commit(); db.close()
+    db.commit()
+    db.close()
     return jsonify({"ok": True})
+
 
 @app.route("/api/place/get-zone")
 def api_place_get_zone():
-    place = request.args.get("place","").strip().upper()
+    place = request.args.get("place", "").strip().upper()
     if not place: return jsonify({})
-    db = get_db_connection(); cur = db.cursor()
+    db  = get_db_connection()
+    cur = db.cursor()
     cur.execute("SELECT zone FROM place_zones WHERE UPPER(place)=%s LIMIT 1", (place,))
-    row = cur.fetchone(); db.close()
+    row = cur.fetchone()
+    db.close()
     return jsonify(dict(row) if row else {})
+
 
 @app.route("/api/ac/district")
 def api_ac_district():
-    q = request.args.get("q","").strip()
+    q = request.args.get("q", "").strip()
     if not q: return jsonify([])
-    db = get_db_connection(); cursor = db.cursor()
-    cursor.execute("SELECT DISTINCT district FROM zones WHERE district LIKE %s ORDER BY district LIMIT 10", (f"{q}%",))
-    rows = cursor.fetchall(); db.close()
+    db     = get_db_connection()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT DISTINCT district FROM zones WHERE district ILIKE %s ORDER BY district LIMIT 10",
+        (f"{q}%",)
+    )
+    rows = cursor.fetchall()
+    db.close()
     return jsonify([r["district"] for r in rows])
+
 
 @app.route("/api/dest/zone-lookup")
 def api_dest_zone_lookup():
-    dest = request.args.get("dest","").strip().upper()
-    code = request.args.get("code","").strip().upper()
+    dest = request.args.get("dest", "").strip().upper()
+    code = request.args.get("code", "").strip().upper()
     if not dest or not code: return jsonify({})
-    db = get_db_connection(); cur = db.cursor()
+    db  = get_db_connection()
+    cur = db.cursor()
+
+    cur.execute("SELECT place, zone FROM place_zones WHERE UPPER(place_code)=%s LIMIT 1", (dest,))
+    row = cur.fetchone()
+    if row: db.close(); return jsonify(dict(row))
+
+    cur.execute("SELECT zone FROM place_zones WHERE UPPER(place)=%s LIMIT 1", (dest,))
+    pz = cur.fetchone()
+    if pz: db.close(); return jsonify({"place": dest, "zone": pz["zone"]})
+
     cur.execute("SELECT place, zone FROM rates WHERE UPPER(code)=%s AND UPPER(place)=%s LIMIT 1", (code, dest))
     row = cur.fetchone()
     if row: db.close(); return jsonify(dict(row))
-    cur.execute("SELECT place, zone FROM place_zones WHERE UPPER(place_code)=%s LIMIT 1", (dest,))
-    pz = cur.fetchone()
-    if pz: db.close(); return jsonify({"place": pz["place"], "zone": pz["zone"]})
-    cur.execute("SELECT zone FROM place_zones WHERE UPPER(place)=%s LIMIT 1", (dest,))
-    pz = cur.fetchone()
+
     cur.execute("SELECT place, zone FROM rates WHERE UPPER(code)=%s ORDER BY zone ASC", (code,))
-    all_places    = [dict(r) for r in cur.fetchall()]
-    zone_place_map = {p["zone"]: p["place"] for p in all_places}
-    if pz and pz["zone"] in zone_place_map:
-        db.close(); return jsonify({"place": zone_place_map[pz["zone"]], "zone": pz["zone"]})
+    all_places = [dict(r) for r in cur.fetchall()]
     for p in all_places:
         pu = p["place"].upper()
         if dest in pu or pu in dest:
-            db.close(); return jsonify({"place": p["place"], "zone": p["zone"]})
-    cur.execute("SELECT zone FROM place_zones WHERE UPPER(place)=%s LIMIT 1", (dest,))
-    pz2 = cur.fetchone()
-    if pz2 and pz2["zone"] in zone_place_map:
-        db.close(); return jsonify({"place": zone_place_map[pz2["zone"]], "zone": pz2["zone"]})
-    db.close(); return jsonify({})
+            db.close()
+            return jsonify({"place": p["place"], "zone": p["zone"]})
+
+    db.close()
+    return jsonify({})
 
 # ============================================================
 # SMART ZONE API
 # ============================================================
 @app.route("/api/smart-zone")
 def api_smart_zone():
-    dest = request.args.get("dest","").strip().upper()
-    code = request.args.get("code","").strip().upper()
+    dest = request.args.get("dest", "").strip().upper()
+    code = request.args.get("code", "").strip().upper()
     if not dest: return jsonify({})
-    db = get_db_connection(); cur = db.cursor()
+    db  = get_db_connection()
+    cur = db.cursor()
+
     cur.execute("SELECT place, zone FROM place_zones WHERE UPPER(place_code)=%s LIMIT 1", (dest,))
     row = cur.fetchone()
-    if row: db.close(); return jsonify({**dict(row), "source":"saved", "label":_zone_label(row["zone"])})
+    if row:
+        db.close()
+        return jsonify({**dict(row), "source": "saved", "label": _zone_label(row["zone"])})
+
     cur.execute("SELECT zone FROM place_zones WHERE UPPER(place)=%s LIMIT 1", (dest,))
     row = cur.fetchone()
-    if row: db.close(); return jsonify({"place":dest,"zone":row["zone"],"source":"saved","label":_zone_label(row["zone"])})
+    if row:
+        db.close()
+        return jsonify({"place": dest, "zone": row["zone"], "source": "saved", "label": _zone_label(row["zone"])})
+
     if code:
         cur.execute("SELECT place, zone FROM rates WHERE UPPER(code)=%s AND UPPER(place)=%s LIMIT 1", (code, dest))
         row = cur.fetchone()
-        if row: db.close(); return jsonify({**dict(row),"source":"rate_exact","label":_zone_label(row["zone"])})
+        if row:
+            db.close()
+            return jsonify({**dict(row), "source": "rate_exact", "label": _zone_label(row["zone"])})
+
         cur.execute("SELECT place, zone FROM rates WHERE UPPER(code)=%s ORDER BY zone", (code,))
         for p in [dict(r) for r in cur.fetchall()]:
             if dest in p["place"].upper() or p["place"].upper() in dest:
                 db.close()
-                return jsonify({"place":p["place"],"zone":p["zone"],"source":"rate_partial","label":_zone_label(p["zone"])})
+                return jsonify({"place": p["place"], "zone": p["zone"], "source": "rate_partial",
+                                "label": _zone_label(p["zone"])})
+
     db.close()
     zone, label = _keyword_zone(dest)
-    if zone: return jsonify({"place":dest.title(),"zone":zone,"source":"keyword","label":label})
+    if zone:
+        return jsonify({"place": dest.title(), "zone": zone, "source": "keyword", "label": label})
     return jsonify({})
 
+
 def _zone_label(z):
-    return {1:"Chennai",2:"Tamil Nadu",3:"South India",4:"North Metro",5:"ROI"}.get(int(z),"ROI")
+    return {1: "Chennai", 2: "Tamil Nadu", 3: "South India", 4: "North Metro", 5: "ROI"}.get(int(z), "ROI")
+
 
 def _keyword_zone(dest):
-    ZONE1 = ["CHENNAI","MADRAS","TAMBARAM","VELACHERY","ADYAR","ANNA NAGAR","T NAGAR",
-             "NUNGAMBAKKAM","PERAMBUR","ROYAPURAM","EGMORE","KODAMBAKKAM","CHROMPET",
-             "SHOLINGANALLUR","PORUR","AMBATTUR","AVADI","POONAMALLEE","PALLAVARAM",
-             "PERUNGUDI","THIRUVANMIYUR","MYLAPORE","TRIPLICANE","WASHERMANPET","TONDIARPET"]
-    ZONE2 = ["COIMBATORE","MADURAI","TRICHY","TIRUCHIRAPPALLI","SALEM","TIRUNELVELI",
-             "VELLORE","ERODE","TIRUPPUR","THOOTHUKUDI","TUTICORIN","DINDIGUL","THANJAVUR",
-             "KANCHIPURAM","KUMBAKONAM","NAGERCOIL","SIVAGANGAI","NAMAKKAL","KARUR",
-             "PUDUKOTTAI","RAMANATHAPURAM","VIRUDHUNAGAR","CUDDALORE","NAGAPATTINAM",
-             "OOTY","UDHAGAMANDALAM","KODAIKANAL","HOSUR","RANIPET","TIRUVANNAMALAI",
-             "VILLUPURAM","ARIYALUR","PERAMBALUR","KALLAKURICHI","TENKASI","KRISHNAGIRI",
-             "DHARMAPURI","THENI","NILGIRIS","CHENGALPATTU","TIRUPATTUR"]
-    ZONE3 = ["KERALA","THIRUVANANTHAPURAM","TRIVANDRUM","KOCHI","COCHIN","KOZHIKODE",
-             "CALICUT","THRISSUR","KOLLAM","PALAKKAD","ALAPPUZHA","ALLEPPEY","KANNUR",
-             "MALAPPURAM","KASARAGOD","WAYANAD","IDUKKI","PATHANAMTHITTA","ERNAKULAM",
-             "KOTTAYAM","KARNATAKA","BENGALURU","BANGALORE","MYSURU","MYSORE","HUBLI",
-             "DHARWAD","MANGALURU","MANGALORE","BELAGAVI","BELGAUM","GULBARGA","KALABURAGI",
-             "DAVANAGERE","BELLARY","VIJAYAPURA","BIJAPUR","SHIMOGA","SHIVAMOGGA","TUMKUR",
-             "UDUPI","HASSAN","BIDAR","RAICHUR","BAGALKOT","CHITRADURGA","ANDHRA",
-             "VISAKHAPATNAM","VIZAG","VIJAYAWADA","GUNTUR","NELLORE","KURNOOL",
-             "RAJAHMUNDRY","KAKINADA","TIRUPATI","ANANTAPUR","KADAPA","CHITTOOR","ELURU",
-             "ONGOLE","VIZIANAGARAM","TELANGANA","HYDERABAD","WARANGAL","NIZAMABAD",
-             "KHAMMAM","KARIMNAGAR","RAMAGUNDAM","SECUNDERABAD","NALGONDA","ADILABAD",
-             "MAHBUBNAGAR","SANGAREDDY","SIDDIPET"]
-    ZONE4 = ["DELHI","NEW DELHI","GURGAON","GURUGRAM","NOIDA","FARIDABAD","GHAZIABAD",
-             "GREATER NOIDA","MUMBAI","BOMBAY","THANE","NAVI MUMBAI","PUNE",
-             "KOLKATA","CALCUTTA","HOWRAH","DURGAPUR","ASANSOL"]
-    for kw in ZONE1: 
+    ZONE1 = ["CHENNAI", "MADRAS", "TAMBARAM", "VELACHERY", "ADYAR", "ANNA NAGAR", "T NAGAR",
+             "NUNGAMBAKKAM", "PERAMBUR", "ROYAPURAM", "EGMORE", "KODAMBAKKAM", "CHROMPET",
+             "SHOLINGANALLUR", "PORUR", "AMBATTUR", "AVADI", "POONAMALLEE", "PALLAVARAM",
+             "PERUNGUDI", "THIRUVANMIYUR", "MYLAPORE", "TRIPLICANE", "WASHERMANPET", "TONDIARPET"]
+    ZONE2 = ["COIMBATORE", "MADURAI", "TRICHY", "TIRUCHIRAPPALLI", "SALEM", "TIRUNELVELI",
+             "VELLORE", "ERODE", "TIRUPPUR", "THOOTHUKUDI", "TUTICORIN", "DINDIGUL", "THANJAVUR",
+             "KANCHIPURAM", "KUMBAKONAM", "NAGERCOIL", "SIVAGANGAI", "NAMAKKAL", "KARUR",
+             "PUDUKOTTAI", "RAMANATHAPURAM", "VIRUDHUNAGAR", "CUDDALORE", "NAGAPATTINAM",
+             "OOTY", "UDHAGAMANDALAM", "KODAIKANAL", "HOSUR", "RANIPET", "TIRUVANNAMALAI",
+             "VILLUPURAM", "ARIYALUR", "PERAMBALUR", "KALLAKURICHI", "TENKASI", "KRISHNAGIRI",
+             "DHARMAPURI", "THENI", "NILGIRIS", "CHENGALPATTU", "TIRUPATTUR"]
+    ZONE3 = ["KERALA", "THIRUVANANTHAPURAM", "TRIVANDRUM", "KOCHI", "COCHIN", "KOZHIKODE",
+             "CALICUT", "THRISSUR", "KOLLAM", "PALAKKAD", "ALAPPUZHA", "ALLEPPEY", "KANNUR",
+             "MALAPPURAM", "KASARAGOD", "WAYANAD", "IDUKKI", "PATHANAMTHITTA", "ERNAKULAM",
+             "KOTTAYAM", "KARNATAKA", "BENGALURU", "BANGALORE", "MYSURU", "MYSORE", "HUBLI",
+             "DHARWAD", "MANGALURU", "MANGALORE", "BELAGAVI", "BELGAUM", "GULBARGA", "KALABURAGI",
+             "DAVANAGERE", "BELLARY", "VIJAYAPURA", "BIJAPUR", "SHIMOGA", "SHIVAMOGGA", "TUMKUR",
+             "UDUPI", "HASSAN", "BIDAR", "RAICHUR", "BAGALKOT", "CHITRADURGA", "ANDHRA",
+             "VISAKHAPATNAM", "VIZAG", "VIJAYAWADA", "GUNTUR", "NELLORE", "KURNOOL",
+             "RAJAHMUNDRY", "KAKINADA", "TIRUPATI", "ANANTAPUR", "KADAPA", "CHITTOOR", "ELURU",
+             "ONGOLE", "VIZIANAGARAM", "TELANGANA", "HYDERABAD", "WARANGAL", "NIZAMABAD",
+             "KHAMMAM", "KARIMNAGAR", "RAMAGUNDAM", "SECUNDERABAD", "NALGONDA", "ADILABAD",
+             "MAHBUBNAGAR", "SANGAREDDY", "SIDDIPET"]
+    ZONE4 = ["DELHI", "NEW DELHI", "GURGAON", "GURUGRAM", "NOIDA", "FARIDABAD", "GHAZIABAD",
+             "GREATER NOIDA", "MUMBAI", "BOMBAY", "THANE", "NAVI MUMBAI", "PUNE",
+             "KOLKATA", "CALCUTTA", "HOWRAH", "DURGAPUR", "ASANSOL"]
+    for kw in ZONE1:
         if kw in dest: return 1, "Chennai"
-    for kw in ZONE2: 
+    for kw in ZONE2:
         if kw in dest: return 2, "Tamil Nadu"
-    for kw in ZONE3: 
+    for kw in ZONE3:
         if kw in dest: return 3, "South India"
-    for kw in ZONE4: 
+    for kw in ZONE4:
         if kw in dest: return 4, "North Metro"
     return 5, "ROI"
 
