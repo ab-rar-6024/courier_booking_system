@@ -148,7 +148,7 @@
     </div>
 
     <div class="col-md-2 d-flex align-items-end gap-1">
-        <button type="submit" class="btn btn-success flex-fill">
+        <button type="submit" class="btn btn-success flex-fill" id="rate-submit-btn">
             <i class="fa fa-save"></i> <span id="r-save-lbl">Save</span>
         </button>
         {% if role == 'admin' %}
@@ -234,8 +234,9 @@
 
 {% block scripts %}
 <script>
-// Role flag from server (safe — only controls UI, server guards the real actions)
+// Role flag from server
 const IS_ADMIN = {{ 'true' if role == 'admin' else 'false' }};
+let isSubmitting = false;  // ← prevent double submission
 
 // ======================= ZONE DETECTION =======================
 function getZoneAndCorrectedPlace(originalPlace) {
@@ -452,6 +453,36 @@ document.getElementById('limit-select').addEventListener('change', function() {
     url.searchParams.set('page', '1');
     window.location.href = url.toString();
 });
+
+// ======================= DOUBLE-CLICK PREVENTION =======================
+const rateForm = document.getElementById('rate-form');
+const submitBtn = document.getElementById('rate-submit-btn');
+const saveLabelSpan = document.getElementById('r-save-lbl');
+
+if (rateForm) {
+    rateForm.addEventListener('submit', function(e) {
+        if (isSubmitting) {
+            e.preventDefault();
+            return false;
+        }
+        isSubmitting = true;
+        submitBtn.disabled = true;
+        const originalText = saveLabelSpan.innerText;
+        saveLabelSpan.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
+        // The form will submit normally; after page reload the button state is reset.
+        // If the submission fails (e.g., network error), we could re-enable, but since
+        // the page reloads on success, no need. For safety, we set a timeout to re-enable
+        // after 10 seconds (just in case the server is very slow).
+        setTimeout(() => {
+            if (isSubmitting) {
+                // Re-enable only if still submitting (should not happen on normal reload)
+                isSubmitting = false;
+                submitBtn.disabled = false;
+                saveLabelSpan.innerHTML = originalText;
+            }
+        }, 10000);
+    });
+}
 
 // ======================= INIT =======================
 document.addEventListener("DOMContentLoaded", () => {
