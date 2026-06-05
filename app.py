@@ -699,11 +699,14 @@ def invoice_export():
     cursor = db.cursor()
     try:    fuel_rate = float(request.form.get("fuel_rate", 0))
     except: fuel_rate = 0.0
+<<<<<<< HEAD
 
     from_date = request.form.get("from_date", "")
     to_date   = request.form.get("to_date", "")
     code      = request.form.get("code", "ALL")
 
+=======
+>>>>>>> b4ec5de34c577cd189bc80a0bfbefbaac459f1bb
     query  = """SELECT booking_date AS "DATE", destination AS "DESTINATION",
                        awb_no AS "AWB NO", weight AS "WEIGHT",
                        total_amount AS "Total"
@@ -711,17 +714,21 @@ def invoice_export():
     params = []
     if from_date and to_date:
         query += " AND booking_date BETWEEN %s AND %s"
+<<<<<<< HEAD
         params.extend([from_date, to_date])
     if code and code != "ALL":
         query += " AND code=%s"; params.append(code)
+=======
+        params.extend([request.form["from_date"], request.form["to_date"]])
+    if request.form.get("code") and request.form["code"] != "ALL":
+        query += " AND code=%s"; params.append(request.form["code"])
+>>>>>>> b4ec5de34c577cd189bc80a0bfbefbaac459f1bb
     query += " ORDER BY booking_date"
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
-
     if fuel_rate > 0 and not df.empty:
         df['Fuel']        = (df['Total'].astype(float) * fuel_rate / 100).round(2)
         df['Grand Total'] = (df['Total'].astype(float) + df['Fuel']).round(2)
-
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -891,6 +898,7 @@ def invoice_pdf():
     sub_style   = ParagraphStyle('sub',   fontSize=9,  alignment=TA_CENTER, spaceAfter=8, textColor=colors.grey)
 
     elements   = []
+<<<<<<< HEAD
 
     # Company Name
     elements.append(Paragraph("Professional Couriers", title_style))
@@ -907,6 +915,13 @@ def invoice_pdf():
     if fuel_percent > 0:
         elements.append(Paragraph(f"Fuel Surcharge: {fuel_percent:.2f}%", sub_style))
 
+=======
+    title_text = "Invoice / Statement"
+    if code and code != "ALL": title_text += f"  —  {code}"
+    elements.append(Paragraph(title_text, title_style))
+    if from_date and to_date:  elements.append(Paragraph(f"{from_date}  to  {to_date}", sub_style))
+    if fuel_percent > 0:       elements.append(Paragraph(f"Fuel Surcharge: {fuel_percent:.2f}%", sub_style))
+>>>>>>> b4ec5de34c577cd189bc80a0bfbefbaac459f1bb
     elements.append(Spacer(1, 4*mm))
 
     header     = ['SNO', 'DATE', 'DESTINATION', 'AWB NO', 'WEIGHT', 'Total']
