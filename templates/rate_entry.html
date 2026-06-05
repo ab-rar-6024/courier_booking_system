@@ -1,7 +1,14 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<h4 class="mb-3">Rate Entry</h4>
+<h4 class="mb-3">
+    Rate Entry
+    {% if role == 'admin' %}
+    <span class="badge bg-danger ms-2" style="font-size:0.65rem;vertical-align:middle">ADMIN</span>
+    {% else %}
+    <span class="badge bg-primary ms-2" style="font-size:0.65rem;vertical-align:middle">USER – Add Only</span>
+    {% endif %}
+</h4>
 
 <div class="d-flex justify-content-between mb-2">
     <!-- Search form -->
@@ -17,21 +24,23 @@
     <div class="d-flex gap-2 align-items-center">
         <div class="d-flex align-items-center gap-1">
             <label class="small">Show:</label>
-            <select name="limit" id="limit-select" class="form-select form-select-sm" style="width: auto;">
-                <option value="10" {% if limit == '10' %}selected{% endif %}>10</option>
-                <option value="20" {% if limit == '20' %}selected{% endif %}>20</option>
+            <select name="limit" id="limit-select" class="form-select form-select-sm" style="width:auto;">
+                <option value="10"  {% if limit == '10'  %}selected{% endif %}>10</option>
+                <option value="20"  {% if limit == '20'  %}selected{% endif %}>20</option>
                 <option value="100" {% if limit == '100' %}selected{% endif %}>100</option>
                 <option value="500" {% if limit == '500' %}selected{% endif %}>500</option>
                 <option value="all" {% if limit == 'all' %}selected{% endif %}>All</option>
             </select>
         </div>
+        {% if role == 'admin' %}
         <a href="/rate-export" class="btn btn-success btn-sm">
             <i class="fa fa-file-excel"></i> Export to Excel
         </a>
+        {% endif %}
     </div>
 </div>
 
-<!-- PAGINATION INFO & CONTROLS -->
+<!-- PAGINATION -->
 {% if limit != 'all' and total_pages > 1 %}
 <div class="d-flex justify-content-between align-items-center mb-2">
     <small>
@@ -62,8 +71,15 @@
 <small>Showing all {{ total }} entries</small>
 {% endif %}
 
-<!-- ENTRY / EDIT FORM -->
-<div class="card p-3 mb-4">
+<!-- ENTRY FORM -->
+<div class="card p-3 mb-4 {% if role != 'admin' %}border-primary{% endif %}">
+{% if role != 'admin' %}
+<div class="alert alert-info py-2 mb-3 small">
+    <i class="fa fa-info-circle me-1"></i>
+    You are logged in as <strong>User</strong>. You can <strong>add new rate entries only</strong>.
+    Editing and deleting existing records is restricted to admins.
+</div>
+{% endif %}
 <form method="post" id="rate-form">
 <input type="hidden" name="_action" id="rate-action" value="add">
 <input type="hidden" name="edit_id" id="rate-edit-id" value="">
@@ -98,11 +114,10 @@
         <label>Zone</label>
         <input name="zone" id="r-zone" class="form-control fw-bold text-center"
                readonly placeholder="Auto"
-               style="background:#f0f4ff; border:2px solid #6c8ebf;
-                      color:#1a3a6b; font-size:1.1rem; cursor:not-allowed;">
+               style="background:#f0f4ff;border:2px solid #6c8ebf;
+                      color:#1a3a6b;font-size:1.1rem;cursor:not-allowed;">
     </div>
 
-    <!-- RATE SLABS -->
     <div class="col-md-1">
         <label class="small fw-semibold">250 GMS</label>
         <input name="rate_250g" id="r-250g" type="number" step="0.01" class="form-control" value="">
@@ -133,11 +148,13 @@
     </div>
 
     <div class="col-md-2 d-flex align-items-end gap-1">
-        <button type="submit" class="btn btn-success flex-fill btn-submit">
+        <button type="submit" class="btn btn-success flex-fill">
             <i class="fa fa-save"></i> <span id="r-save-lbl">Save</span>
         </button>
+        {% if role == 'admin' %}
         <button type="button" class="btn btn-secondary" id="r-cancel-btn"
                 style="display:none" onclick="rateCancel()">✕</button>
+        {% endif %}
     </div>
 
 </div>
@@ -153,7 +170,7 @@
     <th>250 GMS</th><th>500 GMS</th><th>1 KG</th>
     <th>ABV 1KG/KG</th><th>ABV 3KG/KG</th><th>ABV 10KG/KG</th>
     <th>FSC %</th>
-    <th>Action</th>
+    {% if role == 'admin' %}<th>Action</th>{% endif %}
 </tr>
 </thead>
 <tbody>
@@ -166,7 +183,9 @@
     <td>
         {% set zone_labels = {1:'Z1',2:'Z2',3:'Z3',4:'Z4',5:'Z5'} %}
         {% set zone_colors = {1:'primary',2:'success',3:'warning',4:'danger',5:'secondary'} %}
-        <span class="badge bg-{{ zone_colors.get(r.zone, 'secondary') }}">{{ zone_labels.get(r.zone, r.zone) }}</span>
+        <span class="badge bg-{{ zone_colors.get(r.zone, 'secondary') }}">
+            {{ zone_labels.get(r.zone, r.zone) }}
+        </span>
     </td>
     <td>{{ r.rate_250g }}</td>
     <td>{{ r.rate_500g }}</td>
@@ -181,18 +200,31 @@
             <span class="text-muted">—</span>
         {% endif %}
     </td>
+    {% if role == 'admin' %}
     <td>
-        <button class="btn btn-warning btn-act btn-sm" onclick='rateEdit({{ r|tojson }})'><i class="fa fa-pen"></i></button>
-        <button class="btn btn-info btn-act btn-sm text-white" onclick='rateCopy({{ r|tojson }})'><i class="fa fa-copy"></i></button>
+        <button class="btn btn-warning btn-act btn-sm" onclick='rateEdit({{ r|tojson }})'>
+            <i class="fa fa-pen"></i>
+        </button>
+        <button class="btn btn-info btn-act btn-sm text-white" onclick='rateCopy({{ r|tojson }})'>
+            <i class="fa fa-copy"></i>
+        </button>
         <form method="post" id="rdel-{{ r.id }}" style="display:inline">
             <input type="hidden" name="_action" value="delete">
             <input type="hidden" name="del_id"  value="{{ r.id }}">
-            <button type="button" class="btn btn-danger btn-act btn-sm" onclick="confirmDel('rdel-{{ r.id }}')"><i class="fa fa-trash"></i></button>
+            <button type="button" class="btn btn-danger btn-act btn-sm"
+                    onclick="confirmDel('rdel-{{ r.id }}')">
+                <i class="fa fa-trash"></i>
+            </button>
         </form>
     </td>
+    {% endif %}
 </tr>
 {% else %}
-<tr><td colspan="13" class="text-center">No Records</td></tr>
+<tr>
+    <td colspan="{{ 13 if role == 'admin' else 12 }}" class="text-center text-muted">
+        No Records Found
+    </td>
+</tr>
 {% endfor %}
 </tbody>
 </table>
@@ -202,243 +234,218 @@
 
 {% block scripts %}
 <script>
-// ======================= ZONE DETECTION & PLACE AUTO-CORRECTION =======================
+// Role flag from server (safe — only controls UI, server guards the real actions)
+const IS_ADMIN = {{ 'true' if role == 'admin' else 'false' }};
+
+// ======================= ZONE DETECTION =======================
 function getZoneAndCorrectedPlace(originalPlace) {
     if (!originalPlace) return { zoneNum: null, correctedPlace: originalPlace };
     const p = originalPlace.trim().toUpperCase();
-
     if (p === "CHENNAI") return { zoneNum: 1, correctedPlace: "CHENNAI" };
-
     if (p === "TAMIL NADU" || p === "TAMILNADU") return { zoneNum: 2, correctedPlace: "TAMIL NADU" };
-
-    const southKeywords = ["KERALA", "KARNATAKA", "ANDHRA PRADESH", "ANDHRA", "TELANGANA", "SOUTH"];
-    if (southKeywords.some(kw => p === kw || p.includes(kw) || kw.includes(p))) {
+    const southKw = ["KERALA","KARNATAKA","ANDHRA PRADESH","ANDHRA","TELANGANA","SOUTH"];
+    if (southKw.some(kw => p === kw || p.includes(kw) || kw.includes(p)))
         return { zoneNum: 3, correctedPlace: "SOUTH" };
-    }
-
-    const northMetro = ["DELHI", "NEW DELHI", "MUMBAI", "KOLKATA", "CALCUTTA", "NORTH"];
-    if (northMetro.some(kw => p === kw || p.includes(kw) || kw.includes(p))) {
+    const northKw = ["DELHI","NEW DELHI","MUMBAI","KOLKATA","CALCUTTA","NORTH"];
+    if (northKw.some(kw => p === kw || p.includes(kw) || kw.includes(p)))
         return { zoneNum: 4, correctedPlace: "NORTH" };
-    }
-
     return { zoneNum: 5, correctedPlace: originalPlace.trim().toUpperCase() };
 }
 
 function applyZone(zoneNum) {
-    const zoneField = document.getElementById("r-zone");
+    const zf = document.getElementById("r-zone");
     if (zoneNum) {
-        zoneField.value = zoneNum;
+        zf.value = zoneNum;
         const colors = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
-        zoneField.style.background = colors[zoneNum] || "#f0f4ff";
+        zf.style.background = colors[zoneNum] || "#f0f4ff";
     } else {
-        zoneField.value = "";
-        zoneField.style.background = "#f0f4ff";
+        zf.value = "";
+        zf.style.background = "#f0f4ff";
     }
 }
 
 function updatePlaceAndZone() {
-    const placeInput = document.getElementById("r-place");
-    const original = placeInput.value;
-    const { zoneNum, correctedPlace } = getZoneAndCorrectedPlace(original);
-    if (correctedPlace && correctedPlace !== original) {
-        placeInput.value = correctedPlace;
-    }
+    const pi = document.getElementById("r-place");
+    const { zoneNum, correctedPlace } = getZoneAndCorrectedPlace(pi.value);
+    if (correctedPlace && correctedPlace !== pi.value) pi.value = correctedPlace;
     applyZone(zoneNum);
 }
 
-function onPlaceBlur(val) {
-    updatePlaceAndZone();
-    onCodePlaceChange();
-}
-
-function onPlaceInput(val) {
-    const { zoneNum } = getZoneAndCorrectedPlace(val);
-    applyZone(zoneNum);
-}
-
+function onPlaceBlur(val)     { updatePlaceAndZone(); onCodePlaceChange(); }
+function onPlaceInput(val)    { applyZone(getZoneAndCorrectedPlace(val).zoneNum); }
 function onPlaceKeydown(e) {
-    if (e.key === "Enter") {
-        e.preventDefault();
-        updatePlaceAndZone();
-        onCodePlaceChange();
-    }
-    if (e.key === "Tab") {
-        updatePlaceAndZone();
-        onCodePlaceChange();
-    }
+    if (e.key === "Enter") { e.preventDefault(); updatePlaceAndZone(); onCodePlaceChange(); }
+    if (e.key === "Tab")   { updatePlaceAndZone(); onCodePlaceChange(); }
 }
-
-function setPlaceAndZone(placeValue) {
-    const placeInput = document.getElementById("r-place");
-    placeInput.value = placeValue;
+function setPlaceAndZone(v) {
+    document.getElementById("r-place").value = v;
     updatePlaceAndZone();
 }
 
 // ======================= AUTO-FETCH RATES =======================
 let autoFetchTimer = null;
-
 function onCodePlaceChange() {
     clearTimeout(autoFetchTimer);
     autoFetchTimer = setTimeout(tryAutoFetch, 400);
 }
-
 async function tryAutoFetch() {
     if (document.getElementById("rate-action").value === "edit") return;
-
     const code  = document.getElementById("r-code").value.trim().toUpperCase();
-    let place   = document.getElementById("r-place").value.trim().toUpperCase();
+    const place = document.getElementById("r-place").value.trim().toUpperCase();
     if (!code || !place) return;
-
     const zoneNum = getZoneAndCorrectedPlace(place).zoneNum;
     if (!zoneNum) return;
-
     try {
-        const res = await fetch(`/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${zoneNum}`);
+        const res  = await fetch(`/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${zoneNum}`);
         const data = await res.json();
         if (data && data.id) {
-            document.getElementById("r-250g").value  = data.rate_250g  ?? "";
-            document.getElementById("r-500g").value  = data.rate_500g  ?? "";
-            document.getElementById("r-500g1").value = data.rate_500g_1 ?? "";
-            document.getElementById("r-1to3").value  = data.rate_1_to_3kg ?? "";
-            document.getElementById("r-3to10").value = data.rate_3_to_10kg ?? "";
+            document.getElementById("r-250g").value  = data.rate_250g       ?? "";
+            document.getElementById("r-500g").value  = data.rate_500g       ?? "";
+            document.getElementById("r-500g1").value = data.rate_500g_1     ?? "";
+            document.getElementById("r-1to3").value  = data.rate_1_to_3kg   ?? "";
+            document.getElementById("r-3to10").value = data.rate_3_to_10kg  ?? "";
             document.getElementById("r-10kg").value  = data.rate_above_10kg ?? "";
-            document.getElementById("r-fuel").value  = data.fuel ?? "";
+            document.getElementById("r-fuel").value  = data.fuel            ?? "";
             if (data.zone) applyZone(data.zone);
             showAutoFetchBadge();
         }
     } catch(e) { console.error("Auto-fetch error:", e); }
 }
-
 function showAutoFetchBadge() {
-    let badge = document.getElementById("autofetch-badge");
-    if (!badge) {
-        badge = document.createElement("div");
-        badge.id = "autofetch-badge";
-        badge.style.cssText = "position:fixed;top:18px;right:24px;z-index:9999;background:#198754;color:#fff;padding:7px 16px;border-radius:8px;font-size:.9rem;box-shadow:0 2px 12px rgba(0,0,0,.2);transition:opacity .5s";
-        badge.textContent = "✓ Rates auto-filled from existing record";
-        document.body.appendChild(badge);
+    let b = document.getElementById("autofetch-badge");
+    if (!b) {
+        b = document.createElement("div");
+        b.id = "autofetch-badge";
+        b.style.cssText = "position:fixed;top:18px;right:24px;z-index:9999;background:#198754;" +
+            "color:#fff;padding:7px 16px;border-radius:8px;font-size:.9rem;" +
+            "box-shadow:0 2px 12px rgba(0,0,0,.2);transition:opacity .5s";
+        b.textContent = "✓ Rates auto-filled from existing record";
+        document.body.appendChild(b);
     }
-    badge.style.opacity = "1";
-    setTimeout(() => { badge.style.opacity = "0"; }, 2500);
+    b.style.opacity = "1";
+    setTimeout(() => { b.style.opacity = "0"; }, 2500);
 }
 
 // ======================= AUTOCOMPLETE =======================
 function bindAC(input, url, onSelect, labelFn, subFn) {
     if (!input) return;
-    let drop = null;
     let parent = input.parentNode;
-    if (!parent.querySelector(".ac-drop")) {
+    let drop = parent.querySelector(".ac-drop");
+    if (!drop) {
         drop = document.createElement("div");
         drop.className = "ac-drop";
         parent.appendChild(drop);
-    } else {
-        drop = parent.querySelector(".ac-drop");
     }
     let timer, hi = -1;
-    function closeMe() { if (drop) drop.classList.remove("open"); hi = -1; }
+    function closeMe() { drop.classList.remove("open"); hi = -1; }
     function render(items) {
         if (!items.length) { closeMe(); return; }
-        drop.innerHTML = "";
-        hi = 0;
+        drop.innerHTML = ""; hi = 0;
         items.forEach((item, i) => {
             const div = document.createElement("div");
             div.className = "ac-item" + (i === 0 ? " hi" : "");
             const lbl = labelFn ? labelFn(item) : String(item);
-            const sub = subFn  ? subFn(item)   : "";
-            div.innerHTML = `<strong>${escapeHtml(lbl)}</strong>` + (sub ? `<div class="ac-sub">${escapeHtml(sub)}</div>` : "");
+            const sub = subFn   ? subFn(item)   : "";
+            div.innerHTML = `<strong>${escapeHtml(lbl)}</strong>` +
+                (sub ? `<div class="ac-sub">${escapeHtml(sub)}</div>` : "");
             div.addEventListener("mousedown", e => { e.preventDefault(); onSelect(item); closeMe(); });
             drop.appendChild(div);
         });
         drop.classList.add("open");
         document.querySelectorAll(".ac-drop.open").forEach(d => { if (d !== drop) d.classList.remove("open"); });
     }
-    function moveHi(delta) { const els = drop.querySelectorAll(".ac-item"); if (!els.length) return; if (hi >= 0) els[hi]?.classList.remove("hi"); hi = Math.max(0, Math.min(els.length - 1, (hi < 0 ? 0 : hi) + delta)); els[hi]?.classList.add("hi"); els[hi]?.scrollIntoView({ block: "nearest" }); }
+    function moveHi(d) {
+        const els = drop.querySelectorAll(".ac-item");
+        if (!els.length) return;
+        if (hi >= 0) els[hi]?.classList.remove("hi");
+        hi = Math.max(0, Math.min(els.length - 1, (hi < 0 ? 0 : hi) + d));
+        els[hi]?.classList.add("hi");
+        els[hi]?.scrollIntoView({ block: "nearest" });
+    }
     input.addEventListener("input", () => {
         clearTimeout(timer);
         const q = input.value.trim();
         if (!q) { closeMe(); return; }
         timer = setTimeout(async () => {
-            try {
-                const data = await fetch(url + encodeURIComponent(q)).then(r => r.json());
-                render(data);
-            } catch(e) { console.error(e); }
+            try { render(await fetch(url + encodeURIComponent(q)).then(r => r.json())); }
+            catch(e) { console.error(e); }
         }, 80);
     });
     input.addEventListener("keydown", e => {
         if (!drop.classList.contains("open")) return;
         if      (e.key === "ArrowDown") { e.preventDefault(); moveHi(1); }
         else if (e.key === "ArrowUp")   { e.preventDefault(); moveHi(-1); }
-        else if (e.key === "Enter")     { const h = drop.querySelector(".ac-item.hi"); if (h) { e.preventDefault(); e.stopImmediatePropagation(); h.dispatchEvent(new MouseEvent("mousedown")); } }
-        else if (e.key === "Escape")    closeMe();
+        else if (e.key === "Enter")     {
+            const h = drop.querySelector(".ac-item.hi");
+            if (h) { e.preventDefault(); e.stopImmediatePropagation(); h.dispatchEvent(new MouseEvent("mousedown")); }
+        }
+        else if (e.key === "Escape") closeMe();
     });
     input.addEventListener("blur", () => setTimeout(closeMe, 160));
 }
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    });
+    return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
 }
 
-// ======================= TABLE ROW ACTIONS =======================
+// ======================= TABLE ACTIONS (admin only) =======================
 function rateEdit(r) {
-    document.getElementById("rate-action").value   = "edit";
-    document.getElementById("rate-edit-id").value  = r.id;
-    document.getElementById("r-code").value        = r.code;
-    document.getElementById("r-fullform").value    = r.code_fullform;
-    document.getElementById("r-place").value       = r.place;
-    document.getElementById("r-250g").value        = r.rate_250g;
-    document.getElementById("r-500g").value        = r.rate_500g;
-    document.getElementById("r-500g1").value       = r.rate_500g_1;
-    document.getElementById("r-1to3").value        = r.rate_1_to_3kg;
-    document.getElementById("r-3to10").value       = r.rate_3_to_10kg;
-    document.getElementById("r-10kg").value        = r.rate_above_10kg;
-    document.getElementById("r-fuel").value        = r.fuel ?? "";
-    if (r.zone) applyZone(r.zone);
-    else updatePlaceAndZone();
-    document.getElementById("r-save-lbl").textContent     = "Update";
-    document.getElementById("r-cancel-btn").style.display = "inline-block";
+    if (!IS_ADMIN) return;
+    document.getElementById("rate-action").value  = "edit";
+    document.getElementById("rate-edit-id").value = r.id;
+    document.getElementById("r-code").value       = r.code;
+    document.getElementById("r-fullform").value   = r.code_fullform;
+    document.getElementById("r-place").value      = r.place;
+    document.getElementById("r-250g").value       = r.rate_250g;
+    document.getElementById("r-500g").value       = r.rate_500g;
+    document.getElementById("r-500g1").value      = r.rate_500g_1;
+    document.getElementById("r-1to3").value       = r.rate_1_to_3kg;
+    document.getElementById("r-3to10").value      = r.rate_3_to_10kg;
+    document.getElementById("r-10kg").value       = r.rate_above_10kg;
+    document.getElementById("r-fuel").value       = r.fuel ?? "";
+    if (r.zone) applyZone(r.zone); else updatePlaceAndZone();
+    document.getElementById("r-save-lbl").textContent = "Update";
+    const cancelBtn = document.getElementById("r-cancel-btn");
+    if (cancelBtn) cancelBtn.style.display = "inline-block";
     document.querySelectorAll(".editing-row").forEach(e => e.classList.remove("editing-row"));
     document.getElementById("rrow-" + r.id)?.classList.add("editing-row");
-    window.scrollTo({top:0, behavior:"smooth"});
+    window.scrollTo({ top: 0, behavior: "smooth" });
     document.getElementById("r-code").focus();
 }
 
 function rateCopy(r) {
+    if (!IS_ADMIN) return;
     rateEdit(r);
-    document.getElementById("rate-action").value       = "add";
-    document.getElementById("rate-edit-id").value      = "";
-    document.getElementById("r-place").value           = "";
-    document.getElementById("r-zone").value            = "";
+    document.getElementById("rate-action").value      = "add";
+    document.getElementById("rate-edit-id").value     = "";
+    document.getElementById("r-place").value          = "";
+    document.getElementById("r-zone").value           = "";
     document.getElementById("r-zone").style.background = "#f0f4ff";
-    document.getElementById("r-fuel").value            = r.fuel ?? "";
-    document.getElementById("r-save-lbl").textContent  = "Save";
+    document.getElementById("r-fuel").value           = r.fuel ?? "";
+    document.getElementById("r-save-lbl").textContent = "Save";
     document.getElementById("r-place").focus();
 }
 
 function rateCancel() {
-    document.getElementById("rate-action").value      = "add";
-    document.getElementById("rate-edit-id").value     = "";
+    document.getElementById("rate-action").value  = "add";
+    document.getElementById("rate-edit-id").value = "";
     ["r-code","r-fullform","r-place"].forEach(id => document.getElementById(id).value = "");
     ["r-250g","r-500g","r-500g1","r-1to3","r-3to10","r-10kg","r-fuel"]
         .forEach(id => document.getElementById(id).value = "");
     applyZone(null);
-    document.getElementById("r-save-lbl").textContent     = "Save";
-    document.getElementById("r-cancel-btn").style.display = "none";
+    document.getElementById("r-save-lbl").textContent = "Save";
+    const cancelBtn = document.getElementById("r-cancel-btn");
+    if (cancelBtn) cancelBtn.style.display = "none";
     document.querySelectorAll(".editing-row").forEach(e => e.classList.remove("editing-row"));
 }
 
 function confirmDel(formId) {
-    if (confirm("Delete this rate entry?")) {
-        document.getElementById(formId).submit();
-    }
+    if (!IS_ADMIN) return;
+    if (confirm("Delete this rate entry?")) document.getElementById(formId).submit();
 }
 
-// ======================= LIMIT DROPDOWN AUTO-SUBMIT =======================
+// ======================= LIMIT SELECT =======================
 document.getElementById('limit-select').addEventListener('change', function() {
     const url = new URL(window.location.href);
     url.searchParams.set('limit', this.value);
@@ -446,7 +453,7 @@ document.getElementById('limit-select').addEventListener('change', function() {
     window.location.href = url.toString();
 });
 
-// ======================= INITIALISE =======================
+// ======================= INIT =======================
 document.addEventListener("DOMContentLoaded", () => {
     bindAC(
         document.getElementById("r-code"),
@@ -462,10 +469,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bindAC(
         document.getElementById("r-place"),
         "/api/ac/place?q=",
-        v => {
-            setPlaceAndZone(v);
-            onCodePlaceChange();
-        },
+        v => { setPlaceAndZone(v); onCodePlaceChange(); },
         v => v, null
     );
     updatePlaceAndZone();
