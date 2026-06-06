@@ -40,7 +40,7 @@ def admin_required(f):
     return decorated
 
 # ============================================================
-# LOGIN / LOGOUT  (reads from PostgreSQL app_users table)
+# LOGIN / LOGOUT
 # ============================================================
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -62,8 +62,6 @@ def login():
         user = cursor.fetchone()
         db.close()
 
-        # Plain-text comparison
-        # (replace with bcrypt check if you hash passwords)
         if user and user["password"] == password:
             session["username"] = user["username"]
             session["role"]     = user["role"]
@@ -215,7 +213,6 @@ def rate_entry():
         return redirect(url_for('rate_entry', search=search,
                                 limit=limit_str, page=1))
 
-    # GET — use ILIKE for case-insensitive search in PostgreSQL
     base_query = "FROM rates"
     params     = []
     if search:
@@ -295,40 +292,41 @@ def booking_entry():
             db.close()
             return redirect("/booking-entry?view=recent")
 
-        code         = txt(request.form.get("code"))
-        booking_date = to_date(request.form.get("booking_date"))
-        awb_no       = txt(request.form.get("awb_no"))
-        destination  = txt(request.form.get("destination"))
-        weight       = num(request.form.get("weight"))
-        courier      = txt(request.form.get("courier"))
-        zone         = txt(request.form.get("zone"))
-        auto_amount  = num(request.form.get("auto_amount"))
-        fuel         = num(request.form.get("fuel"))
-        total_amount = auto_amount + fuel
-        client_name  = txt(request.form.get("client_name"))
-        inv_no       = txt(request.form.get("inv_no"))
-        inv_date     = to_date(request.form.get("inv_date"))
+        code          = txt(request.form.get("code"))
+        code_fullform = txt(request.form.get("code_fullform"))
+        booking_date  = to_date(request.form.get("booking_date"))
+        awb_no        = txt(request.form.get("awb_no"))
+        destination   = txt(request.form.get("destination"))
+        weight        = num(request.form.get("weight"))
+        courier       = txt(request.form.get("courier"))
+        zone          = txt(request.form.get("zone"))
+        auto_amount   = num(request.form.get("auto_amount"))
+        fuel          = num(request.form.get("fuel"))
+        total_amount  = auto_amount + fuel
+        client_name   = txt(request.form.get("client_name"))
+        inv_no        = txt(request.form.get("inv_no"))
+        inv_date      = to_date(request.form.get("inv_date"))
 
         if action == "edit":
             cursor.execute("""
                 UPDATE bookings SET
-                    code=%s, booking_date=%s, awb_no=%s, destination=%s,
+                    code=%s, code_fullform=%s, booking_date=%s, awb_no=%s, destination=%s,
                     weight=%s, courier=%s, zone=%s, auto_amount=%s,
                     fuel=%s, total_amount=%s, client_name=%s,
                     inv_no=%s, inv_date=%s
                 WHERE id=%s
-            """, (code, booking_date, awb_no, destination, weight,
+            """, (code, code_fullform, booking_date, awb_no, destination, weight,
                   courier, zone, auto_amount, fuel, total_amount,
                   client_name, inv_no, inv_date,
                   request.form.get("edit_id")))
         else:
             cursor.execute("""
                 INSERT INTO bookings (
-                    code, booking_date, awb_no, destination, weight,
+                    code, code_fullform, booking_date, awb_no, destination, weight,
                     courier, zone, auto_amount, fuel, total_amount,
                     client_name, inv_no, inv_date
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (code, booking_date, awb_no, destination, weight,
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (code, code_fullform, booking_date, awb_no, destination, weight,
                   courier, zone, auto_amount, fuel, total_amount,
                   client_name, inv_no, inv_date))
 
@@ -384,8 +382,11 @@ def booking_import():
     cursor.execute("SELECT * FROM rates")
     all_rates  = cursor.fetchall()
     rate_cache = {}
+    fullform_cache = {}
     for r in all_rates:
         rate_cache[(r['code'].upper(), r['zone'])] = dict(r)
+        if r['code'].upper() not in fullform_cache:
+            fullform_cache[r['code'].upper()] = r.get('code_fullform', '') or ''
     db.close()
 
     preview_rows = []
@@ -416,12 +417,13 @@ def booking_import():
                 else:
                     raise ValueError(f"Invalid date format: {date_str}")
 
-            awb_no      = str(row['AWB Number']).strip()
-            destination = str(row['Destination']).strip().upper()
-            weight      = float(row['Weight'])
-            zone_num    = zone_name_to_number(str(row['Zone']).strip())
-            rate_row    = rate_cache.get((code, zone_num))
-            auto_amount = 0.0
+            awb_no        = str(row['AWB Number']).strip()
+            destination   = str(row['Destination']).strip().upper()
+            weight        = float(row['Weight'])
+            zone_num      = zone_name_to_number(str(row['Zone']).strip())
+            rate_row      = rate_cache.get((code, zone_num))
+            auto_amount   = 0.0
+            code_fullform = fullform_cache.get(code, '')
 
             if rate_row:
                 for max_w, col_name in slabs:
@@ -437,11 +439,12 @@ def booking_import():
                 )
 
             preview_rows.append({
-                "temp_id": row_num, "code": code, "booking_date": date_str,
+                "temp_id": row_num, "code": code, "code_fullform": code_fullform,
+                "booking_date": date_str,
                 "awb_no": awb_no, "destination": destination, "weight": weight,
                 "zone": zone_num, "auto_amount": auto_amount,
                 "courier": str(row['Courier']).strip()
-                    if 'Courier' in df.columns and not pd.isna(row.get('Courier')) else "",
+                    if 'Courier' in df.columns and not pd.isna(row.get('Courier')) else "ST COURIER",
                 "valid": True
             })
         except Exception as e:
@@ -475,13 +478,13 @@ def booking_import_save():
                 continue
             cursor.execute("""
                 INSERT INTO bookings (
-                    code, booking_date, awb_no, destination, weight,
+                    code, code_fullform, booking_date, awb_no, destination, weight,
                     courier, zone, auto_amount, fuel, total_amount,
                     client_name, inv_no, inv_date
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
-                row['code'], row['booking_date'], row['awb_no'],
-                row['destination'], row['weight'], row.get('courier', ''),
+                row['code'], row.get('code_fullform', ''), row['booking_date'], row['awb_no'],
+                row['destination'], row['weight'], row.get('courier', 'ST COURIER'),
                 str(row['zone']), row['auto_amount'], 0.0, row['auto_amount'],
                 '', '', None
             ))
@@ -503,7 +506,7 @@ def api_bookings():
     db     = get_db_connection()
     cursor = db.cursor()
     sql = """
-        SELECT id, code, booking_date, awb_no, destination, weight,
+        SELECT id, code, code_fullform, booking_date, awb_no, destination, weight,
                courier, zone, auto_amount, fuel, total_amount,
                client_name, inv_no, inv_date
         FROM bookings
@@ -607,7 +610,7 @@ def sales_checking():
 
     if show_results:
         query = """
-            SELECT code, awb_no, destination,
+            SELECT code, code_fullform, awb_no, destination,
                    COUNT(*) AS sum_count, SUM(total_amount) AS amount
             FROM bookings WHERE 1=1
         """
@@ -626,7 +629,7 @@ def sales_checking():
             query += " AND booking_date = %s"
             params.append(single_date)
 
-        query += " GROUP BY code, awb_no, destination ORDER BY code"
+        query += " GROUP BY code, code_fullform, awb_no, destination ORDER BY code"
         cursor.execute(query, params)
         rows         = [dict(r) for r in cursor.fetchall()]
         total_amount = sum(r["amount"] for r in rows) if rows else 0
@@ -721,7 +724,6 @@ def invoice_export():
     to_date   = request.form.get("to_date", "")
     code      = request.form.get("code", "ALL")
 
-    # PostgreSQL uses double-quoted aliases
     query  = """SELECT booking_date AS "DATE", destination AS "DESTINATION",
                        awb_no AS "AWB NO", weight AS "WEIGHT",
                        total_amount AS "Total"
@@ -801,7 +803,8 @@ def booking_export():
     db = get_db_connection()
     cursor = db.cursor()
     cursor.execute("""
-        SELECT code AS "CODE", booking_date AS "DATE", awb_no AS "AWB NO",
+        SELECT code AS "CODE", code_fullform AS "COMPANY NAME",
+               booking_date AS "DATE", awb_no AS "AWB NO",
                destination AS "DESTINATION", weight AS "WEIGHT", courier AS "COURIER",
                zone AS "ZONE", auto_amount AS "Auto Amount", fuel AS "Fuel",
                total_amount AS "Total Amount", client_name AS "Client Name",
@@ -822,9 +825,9 @@ def booking_export():
 def sales_export():
     db     = get_db_connection()
     cursor = db.cursor()
-    query  = """SELECT code AS "Client Code", awb_no AS "AWB No",
-                       destination AS "Destination", COUNT(*) AS "Sum",
-                       SUM(total_amount) AS "Amount"
+    query  = """SELECT code AS "Client Code", code_fullform AS "Company Name",
+                       awb_no AS "AWB No", destination AS "Destination",
+                       COUNT(*) AS "Sum", SUM(total_amount) AS "Amount"
                 FROM bookings WHERE 1=1"""
     params = []
     if request.form.get("client_code"):
@@ -839,7 +842,7 @@ def sales_export():
     if request.form.get("date"):
         query += " AND booking_date = %s"
         params.append(request.form["date"])
-    query += " GROUP BY code, awb_no, destination ORDER BY code"
+    query += " GROUP BY code, code_fullform, awb_no, destination ORDER BY code"
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
     output = io.BytesIO()
@@ -1082,7 +1085,7 @@ def sales_pdf():
     single_date = request.form.get("date", "").strip()
 
     query = """
-        SELECT code, awb_no, destination,
+        SELECT code, code_fullform, awb_no, destination,
                COUNT(*) AS sum_count, SUM(total_amount) AS amount
         FROM bookings WHERE 1=1
     """
@@ -1100,7 +1103,7 @@ def sales_pdf():
         query += " AND booking_date = %s"
         params.append(single_date)
 
-    query += " GROUP BY code, awb_no, destination ORDER BY code"
+    query += " GROUP BY code, code_fullform, awb_no, destination ORDER BY code"
     cursor.execute(query, params)
     rows         = [dict(r) for r in cursor.fetchall()]
     total_amount = sum(r["amount"] for r in rows) if rows else 0
@@ -1130,22 +1133,23 @@ def sales_pdf():
         elements.append(Paragraph(" | ".join(filter_text), normal_style))
     elements.append(Spacer(1, 12))
 
-    header = ['SNO', 'Client Code', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
+    header = ['SNO', 'Code', 'Company Name', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
     data   = [header]
 
     for i, row in enumerate(rows, start=1):
         data.append([
             str(i),
-            Paragraph(row['code'] or '', name_style),
+            row['code'] or '',
+            Paragraph(row['code_fullform'] or '', name_style),
             row['awb_no'] or '',
             row['destination'] or '',
             str(row['sum_count']),
             f"{row['amount']:.2f}"
         ])
 
-    data.append(['', '', '', '', 'Total:', f"{total_amount:.2f}"])
+    data.append(['', '', '', '', '', 'Total:', f"{total_amount:.2f}"])
 
-    col_widths = [30, 140, 90, 130, 45, 70]
+    col_widths = [25, 40, 110, 85, 110, 35, 60]
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND',    (0, 0),  (-1, 0),  colors.grey),
@@ -1158,13 +1162,13 @@ def sales_pdf():
         ('FONTNAME',      (0, 1),  (-1, -1), 'Helvetica'),
         ('FONTSIZE',      (0, 1),  (-1, -1), 9),
         ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),
-        ('ALIGN',         (4, 1),  (5,  -1), 'RIGHT'),
+        ('ALIGN',         (5, 1),  (6,  -1), 'RIGHT'),
         ('VALIGN',        (0, 0),  (-1, -1), 'MIDDLE'),
         ('GRID',          (0, 0),  (-1, -2), 0.5, colors.grey),
         ('LINEABOVE',     (0, -1), (-1, -1), 1,   colors.black),
         ('BACKGROUND',    (0, -1), (-1, -1), colors.lavender),
         ('FONTNAME',      (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('ALIGN',         (4, -1), (5,  -1), 'RIGHT'),
+        ('ALIGN',         (5, -1), (6,  -1), 'RIGHT'),
     ]))
 
     elements.append(table)
@@ -1314,7 +1318,6 @@ def api_place_save_zone():
     if not place: return jsonify({"ok": False})
     db  = get_db_connection()
     cur = db.cursor()
-    # PostgreSQL upsert syntax
     cur.execute("""
         INSERT INTO place_zones (place, zone, place_code) VALUES (%s,%s,%s)
         ON CONFLICT (place) DO UPDATE SET
@@ -1433,32 +1436,32 @@ def _zone_label(z):
 
 
 def _keyword_zone(dest):
-    ZONE1 = ["CHENNAI", "MADRAS", "TAMBARAM", "VELACHERY", "ADYAR", "ANNA NAGAR", "T NAGAR",
-             "NUNGAMBAKKAM", "PERAMBUR", "ROYAPURAM", "EGMORE", "KODAMBAKKAM", "CHROMPET",
-             "SHOLINGANALLUR", "PORUR", "AMBATTUR", "AVADI", "POONAMALLEE", "PALLAVARAM",
-             "PERUNGUDI", "THIRUVANMIYUR", "MYLAPORE", "TRIPLICANE", "WASHERMANPET", "TONDIARPET"]
-    ZONE2 = ["COIMBATORE", "MADURAI", "TRICHY", "TIRUCHIRAPPALLI", "SALEM", "TIRUNELVELI",
-             "VELLORE", "ERODE", "TIRUPPUR", "THOOTHUKUDI", "TUTICORIN", "DINDIGUL", "THANJAVUR",
-             "KANCHIPURAM", "KUMBAKONAM", "NAGERCOIL", "SIVAGANGAI", "NAMAKKAL", "KARUR",
-             "PUDUKOTTAI", "RAMANATHAPURAM", "VIRUDHUNAGAR", "CUDDALORE", "NAGAPATTINAM",
-             "OOTY", "UDHAGAMANDALAM", "KODAIKANAL", "HOSUR", "RANIPET", "TIRUVANNAMALAI",
-             "VILLUPURAM", "ARIYALUR", "PERAMBALUR", "KALLAKURICHI", "TENKASI", "KRISHNAGIRI",
-             "DHARMAPURI", "THENI", "NILGIRIS", "CHENGALPATTU", "TIRUPATTUR"]
-    ZONE3 = ["KERALA", "THIRUVANANTHAPURAM", "TRIVANDRUM", "KOCHI", "COCHIN", "KOZHIKODE",
-             "CALICUT", "THRISSUR", "KOLLAM", "PALAKKAD", "ALAPPUZHA", "ALLEPPEY", "KANNUR",
-             "MALAPPURAM", "KASARAGOD", "WAYANAD", "IDUKKI", "PATHANAMTHITTA", "ERNAKULAM",
-             "KOTTAYAM", "KARNATAKA", "BENGALURU", "BANGALORE", "MYSURU", "MYSORE", "HUBLI",
-             "DHARWAD", "MANGALURU", "MANGALORE", "BELAGAVI", "BELGAUM", "GULBARGA", "KALABURAGI",
-             "DAVANAGERE", "BELLARY", "VIJAYAPURA", "BIJAPUR", "SHIMOGA", "SHIVAMOGGA", "TUMKUR",
-             "UDUPI", "HASSAN", "BIDAR", "RAICHUR", "BAGALKOT", "CHITRADURGA", "ANDHRA",
-             "VISAKHAPATNAM", "VIZAG", "VIJAYAWADA", "GUNTUR", "NELLORE", "KURNOOL",
-             "RAJAHMUNDRY", "KAKINADA", "TIRUPATI", "ANANTAPUR", "KADAPA", "CHITTOOR", "ELURU",
-             "ONGOLE", "VIZIANAGARAM", "TELANGANA", "HYDERABAD", "WARANGAL", "NIZAMABAD",
-             "KHAMMAM", "KARIMNAGAR", "RAMAGUNDAM", "SECUNDERABAD", "NALGONDA", "ADILABAD",
-             "MAHBUBNAGAR", "SANGAREDDY", "SIDDIPET"]
-    ZONE4 = ["DELHI", "NEW DELHI", "GURGAON", "GURUGRAM", "NOIDA", "FARIDABAD", "GHAZIABAD",
-             "GREATER NOIDA", "MUMBAI", "BOMBAY", "THANE", "NAVI MUMBAI", "PUNE",
-             "KOLKATA", "CALCUTTA", "HOWRAH", "DURGAPUR", "ASANSOL"]
+    ZONE1 = ["CHENNAI","MADRAS","TAMBARAM","VELACHERY","ADYAR","ANNA NAGAR","T NAGAR",
+             "NUNGAMBAKKAM","PERAMBUR","ROYAPURAM","EGMORE","KODAMBAKKAM","CHROMPET",
+             "SHOLINGANALLUR","PORUR","AMBATTUR","AVADI","POONAMALLEE","PALLAVARAM",
+             "PERUNGUDI","THIRUVANMIYUR","MYLAPORE","TRIPLICANE","WASHERMANPET","TONDIARPET"]
+    ZONE2 = ["COIMBATORE","MADURAI","TRICHY","TIRUCHIRAPPALLI","SALEM","TIRUNELVELI",
+             "VELLORE","ERODE","TIRUPPUR","THOOTHUKUDI","TUTICORIN","DINDIGUL","THANJAVUR",
+             "KANCHIPURAM","KUMBAKONAM","NAGERCOIL","SIVAGANGAI","NAMAKKAL","KARUR",
+             "PUDUKOTTAI","RAMANATHAPURAM","VIRUDHUNAGAR","CUDDALORE","NAGAPATTINAM",
+             "OOTY","UDHAGAMANDALAM","KODAIKANAL","HOSUR","RANIPET","TIRUVANNAMALAI",
+             "VILLUPURAM","ARIYALUR","PERAMBALUR","KALLAKURICHI","TENKASI","KRISHNAGIRI",
+             "DHARMAPURI","THENI","NILGIRIS","CHENGALPATTU","TIRUPATTUR"]
+    ZONE3 = ["KERALA","THIRUVANANTHAPURAM","TRIVANDRUM","KOCHI","COCHIN","KOZHIKODE",
+             "CALICUT","THRISSUR","KOLLAM","PALAKKAD","ALAPPUZHA","ALLEPPEY","KANNUR",
+             "MALAPPURAM","KASARAGOD","WAYANAD","IDUKKI","PATHANAMTHITTA","ERNAKULAM",
+             "KOTTAYAM","KARNATAKA","BENGALURU","BANGALORE","MYSURU","MYSORE","HUBLI",
+             "DHARWAD","MANGALURU","MANGALORE","BELAGAVI","BELGAUM","GULBARGA","KALABURAGI",
+             "DAVANAGERE","BELLARY","VIJAYAPURA","BIJAPUR","SHIMOGA","SHIVAMOGGA","TUMKUR",
+             "UDUPI","HASSAN","BIDAR","RAICHUR","BAGALKOT","CHITRADURGA","ANDHRA",
+             "VISAKHAPATNAM","VIZAG","VIJAYAWADA","GUNTUR","NELLORE","KURNOOL",
+             "RAJAHMUNDRY","KAKINADA","TIRUPATI","ANANTAPUR","KADAPA","CHITTOOR","ELURU",
+             "ONGOLE","VIZIANAGARAM","TELANGANA","HYDERABAD","WARANGAL","NIZAMABAD",
+             "KHAMMAM","KARIMNAGAR","RAMAGUNDAM","SECUNDERABAD","NALGONDA","ADILABAD",
+             "MAHBUBNAGAR","SANGAREDDY","SIDDIPET"]
+    ZONE4 = ["DELHI","NEW DELHI","GURGAON","GURUGRAM","NOIDA","FARIDABAD","GHAZIABAD",
+             "GREATER NOIDA","MUMBAI","BOMBAY","THANE","NAVI MUMBAI","PUNE",
+             "KOLKATA","CALCUTTA","HOWRAH","DURGAPUR","ASANSOL"]
     for kw in ZONE1:
         if kw in dest: return 1, "Chennai"
     for kw in ZONE2:
