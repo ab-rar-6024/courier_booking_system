@@ -39,46 +39,11 @@
     </div>
 </div>
 
-<!-- PAGINATION -->
-{% if limit != 'all' and total_pages > 1 %}
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <small>
-        Showing {{ ((page-1) * limit|int) + 1 }} –
-        {{ [page * limit|int, total]|min }} of {{ total }} entries
-    </small>
-    <nav>
-        <ul class="pagination pagination-sm mb-0">
-            <li class="page-item {% if page == 1 %}disabled{% endif %}">
-                <a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=page-1) if page > 1 else '#' }}">&laquo;</a>
-            </li>
-            {% for p in range(1, total_pages+1) %}
-                {% if p == page %}
-                <li class="page-item active"><span class="page-link">{{ p }}</span></li>
-                {% elif p <= 3 or p > total_pages-3 or (p >= page-2 and p <= page+2) %}
-                <li class="page-item"><a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=p) }}">{{ p }}</a></li>
-                {% elif p == 4 and page > 4 %}
-                <li class="page-item disabled"><span class="page-link">…</span></li>
-                {% endif %}
-            {% endfor %}
-            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
-                <a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=page+1) if page < total_pages else '#' }}">&raquo;</a>
-            </li>
-        </ul>
-    </nav>
-</div>
-{% elif limit == 'all' %}
-<small>Showing all {{ total }} entries</small>
-{% endif %}
-
 <!-- ENTRY FORM -->
 <div class="card p-3 mb-4 {% if role != 'admin' %}border-primary{% endif %}">
-{% if role != 'admin' %}
-
-{% endif %}
 <form method="post" id="rate-form">
 <input type="hidden" name="_action" id="rate-action" value="add">
 <input type="hidden" name="edit_id" id="rate-edit-id" value="">
-<!-- Zone hidden — auto computed, still submitted -->
 <input type="hidden" name="zone" id="r-zone" value="">
 
 <!-- ROW 1: CODE, COMPANY NAME, PLACE -->
@@ -87,7 +52,7 @@
         <label class="form-label mb-1">CODE</label>
         <div class="ac-wrap">
             <input name="code" id="r-code" class="form-control" placeholder="e.g. MAS" required
-       autocomplete="off">
+                   autocomplete="off">
             <div class="ac-drop" id="r-code-drop"></div>
         </div>
     </div>
@@ -156,7 +121,38 @@
 </form>
 </div>
 
-<!-- TABLE -->
+{% if search %}
+<!-- SEARCH RESULTS INFO -->
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <small class="text-muted">
+        <i class="fa fa-search me-1"></i>
+        Showing <strong>{{ total }}</strong> result{{ 's' if total != 1 else '' }} for
+        <span class="badge bg-secondary">{{ search }}</span>
+    </small>
+    {% if limit != 'all' and total_pages > 1 %}
+    <nav>
+        <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=page-1) if page > 1 else '#' }}">&laquo;</a>
+            </li>
+            {% for p in range(1, total_pages+1) %}
+                {% if p == page %}
+                <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                {% elif p <= 3 or p > total_pages-3 or (p >= page-2 and p <= page+2) %}
+                <li class="page-item"><a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=p) }}">{{ p }}</a></li>
+                {% elif p == 4 and page > 4 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+            {% endfor %}
+            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('rate_entry', search=search, limit=limit, page=page+1) if page < total_pages else '#' }}">&raquo;</a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- TABLE — only shown when search is active -->
 <div class="card p-3">
 <table class="table table-bordered table-striped table-sm">
 <thead class="table-dark">
@@ -220,14 +216,22 @@
 </tr>
 {% else %}
 <tr>
-    <td colspan="{{ 13 if role == 'admin' else 12 }}" class="text-center text-muted">
-        No Records Found
+    <td colspan="{{ 13 if role == 'admin' else 12 }}" class="text-center text-muted py-3">
+        <i class="fa fa-search me-1"></i> No records found for "{{ search }}"
     </td>
 </tr>
 {% endfor %}
 </tbody>
 </table>
 </div>
+
+{% else %}
+<!-- NO SEARCH — show hint -->
+<div class="text-center text-muted py-5">
+    <i class="fa fa-search fa-2x mb-2 d-block" style="opacity:0.3"></i>
+    <small>Use the search box above to find rate entries by code or company name.</small>
+</div>
+{% endif %}
 
 {% endblock %}
 
@@ -252,8 +256,7 @@ function getZoneAndCorrectedPlace(originalPlace) {
 }
 
 function applyZone(zoneNum) {
-    const zf = document.getElementById("r-zone");
-    zf.value = zoneNum || "";
+    document.getElementById("r-zone").value = zoneNum || "";
 }
 
 function updatePlaceAndZone() {
@@ -400,8 +403,8 @@ document.getElementById('limit-select').addEventListener('change', function() {
 });
 
 // ======================= FORM SUBMIT =======================
-const rateForm   = document.getElementById('rate-form');
-const submitBtn  = document.getElementById('rate-submit-btn');
+const rateForm      = document.getElementById('rate-form');
+const submitBtn     = document.getElementById('rate-submit-btn');
 const saveLabelSpan = document.getElementById('r-save-lbl');
 
 if (rateForm) {
@@ -423,22 +426,22 @@ if (rateForm) {
 
 // ======================= INIT =======================
 document.addEventListener("DOMContentLoaded", () => {
-bindAC(
-    document.getElementById("r-code"),
-    "/api/ac/code?q=",
-    item => {
-        document.getElementById("r-code").value     = item.code;
-        document.getElementById("r-fullform").value = item.code_fullform;
-    },
-    item => item.code,
-    item => item.code_fullform
-);
-bindAC(
-    document.getElementById("r-place"),
-    "/api/ac/place?q=",
-    v => { setPlaceAndZone(v); },
-    v => v, null
-);
+    bindAC(
+        document.getElementById("r-code"),
+        "/api/ac/code?q=",
+        item => {
+            document.getElementById("r-code").value     = item.code;
+            document.getElementById("r-fullform").value = item.code_fullform;
+        },
+        item => item.code,
+        item => item.code_fullform
+    );
+    bindAC(
+        document.getElementById("r-place"),
+        "/api/ac/place?q=",
+        v => { setPlaceAndZone(v); },
+        v => v, null
+    );
     updatePlaceAndZone();
 });
 </script>
@@ -451,7 +454,6 @@ bindAC(
 .ac-sub { font-size:11px; color:#6c757d; }
 .ac-wrap { position:relative; }
 .editing-row { background:#fff8dc !important; outline:2px solid #ffc107; }
-/* Row dividers in form */
 #rate-form .row { padding-bottom: 4px; }
 #rate-form .row + .row { border-top: 1px dashed #dee2e6; padding-top: 8px; }
 </style>
