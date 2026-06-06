@@ -2,6 +2,7 @@ import io
 from itertools import groupby
 from operator import itemgetter
 from functools import wraps
+import math
 
 from flask import (Flask, render_template, request, redirect,
                    send_file, jsonify, url_for, session, flash)
@@ -429,9 +430,9 @@ def booking_import():
                 for max_w, col_name in slabs:
                     if weight <= max_w:
                         rate        = float(rate_row.get(col_name) or 0)
-                        auto_amount = rate * weight if max_w > 1 else rate
+                        auto_amount = rate * math.ceil(weight) if max_w > 1 else rate
                         break
-            auto_amount = round(auto_amount, 2)
+            auto_amount = round(auto_amount)
 
             if not rate_row:
                 errors.append(

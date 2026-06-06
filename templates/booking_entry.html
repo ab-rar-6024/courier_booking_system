@@ -319,7 +319,7 @@ function computeAmount(rateRow, weight) {
   for (const s of SLABS)
     if (w <= s.max) {
       const rate   = parseFloat(rateRow[s.key] || 0);
-      const amount = s.max > 1 ? +(rate * w).toFixed(2) : rate;
+      const amount = s.max > 1 ? Math.ceil(w) * rate : rate;
       return { amount, slab: s.label, rate };
     }
   return null;
@@ -347,8 +347,8 @@ function applyWeightRate() {
   if (!weight || parseFloat(weight) <= 0) { clearAmounts(); return; }
   const result = computeAmount(lastRateRow, weight);
   if (!result) { clearAmounts(); return; }
-  document.getElementById("bk-auto").value = result.amount.toFixed(2);
-  info.innerHTML = `✓ <strong>${code}</strong> → Zone ${zone} (${ZONE_LABELS[zone] || ""}) | Slab: <strong style="color:#0d6efd">${result.slab}</strong> | Rate: ₹${result.rate.toFixed(2)} | <strong style="color:#198754">Amount: ₹${result.amount.toFixed(2)}</strong>`;
+  document.getElementById("bk-auto").value = result.amount;
+  info.innerHTML = `✓ <strong>${code}</strong> → Zone ${zone} (${ZONE_LABELS[zone] || ""}) | Slab: <strong style="color:#0d6efd">${result.slab}</strong> | Rate: ₹${result.rate.toFixed(2)} | <strong style="color:#198754">Amount: ₹${result.amount}</strong>`;
   const autoEl = document.getElementById("bk-auto");
   autoEl.classList.remove("rate-flash"); void autoEl.offsetWidth; autoEl.classList.add("rate-flash");
 }
