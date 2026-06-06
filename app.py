@@ -617,7 +617,8 @@ def sales_checking():
         params = []
 
         if client_code:
-            query += " AND code ILIKE %s"
+            query += " AND (code ILIKE %s OR code_fullform ILIKE %s)"
+            params.append(f"%{client_code}%")
             params.append(f"%{client_code}%")
         if awb_no:
             query += " AND awb_no ILIKE %s"
@@ -831,7 +832,8 @@ def sales_export():
                 FROM bookings WHERE 1=1"""
     params = []
     if request.form.get("client_code"):
-        query += " AND code ILIKE %s"
+        query += " AND (code ILIKE %s OR code_fullform ILIKE %s)"
+        params.append(f"%{request.form['client_code']}%")
         params.append(f"%{request.form['client_code']}%")
     if request.form.get("awb_no"):
         query += " AND awb_no ILIKE %s"
@@ -851,6 +853,7 @@ def sales_export():
     db.close()
     return send_file(output, as_attachment=True, download_name="Sales_Checking.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 
 
 @app.route("/day-wise-export", methods=["POST"])
@@ -1091,7 +1094,8 @@ def sales_pdf():
     """
     params = []
     if client_code:
-        query += " AND code ILIKE %s"
+        query += " AND (code ILIKE %s OR code_fullform ILIKE %s)"
+        params.append(f"%{client_code}%")
         params.append(f"%{client_code}%")
     if awb_no:
         query += " AND awb_no ILIKE %s"
@@ -1125,7 +1129,7 @@ def sales_pdf():
     elements.append(Paragraph("Sales Checking Report", title_style))
 
     filter_text = []
-    if client_code: filter_text.append(f"Client Code: {client_code}")
+    if client_code: filter_text.append(f"Client Code / Company: {client_code}")
     if awb_no:      filter_text.append(f"AWB: {awb_no}")
     if destination: filter_text.append(f"Destination: {destination}")
     if single_date: filter_text.append(f"Date: {single_date}")
@@ -1149,7 +1153,7 @@ def sales_pdf():
 
     data.append(['', '', '', '', '', 'Total:', f"{total_amount:.2f}"])
 
-    col_widths = [25, 40, 110, 85, 110, 35, 60]
+    col_widths = [20, 35, 115, 80, 100, 30, 55]
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND',    (0, 0),  (-1, 0),  colors.grey),
