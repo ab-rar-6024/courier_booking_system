@@ -136,14 +136,12 @@
         {% set ns.base_total = ns.base_total + (r.total_amount | float) %}
         <tr>
           <td class="text-center">{{ ns.sno }}</td>
-          {% if loop.first %}
-          <td rowspan="{{ group_list | length }}" class="align-middle text-center fw-semibold">
+          <td class="text-center fw-semibold">
             {% if r.booking_date %}
               {% if r.booking_date is string %}{{ r.booking_date }}
               {% else %}{{ r.booking_date.strftime('%d-%m-%Y') }}{% endif %}
             {% endif %}
-           </td>
-          {% endif %}
+          </td>
           <td>{{ r.destination }}</td>
           <td>{{ r.awb_no }}</td>
           <td class="text-end">{{ "%.3f" | format(r.weight | float) }}</td>

@@ -73,11 +73,7 @@
 <!-- ENTRY FORM -->
 <div class="card p-3 mb-4 {% if role != 'admin' %}border-primary{% endif %}">
 {% if role != 'admin' %}
-<div class="alert alert-info py-2 mb-3 small">
-    <i class="fa fa-info-circle me-1"></i>
-    You are logged in as <strong>User</strong>. You can <strong>add new rate entries only</strong>.
-    Editing and deleting existing records is restricted to admins.
-</div>
+
 {% endif %}
 <form method="post" id="rate-form">
 <input type="hidden" name="_action" id="rate-action" value="add">
