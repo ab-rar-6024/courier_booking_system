@@ -597,37 +597,36 @@ def sales_checking():
 
     show_results = (request.method == "POST")
 
-    client_name = request.form.get("client_name", "").strip()
+    client_code = request.form.get("client_code", "").strip()
     awb_no      = request.form.get("awb_no", "").strip()
     destination = request.form.get("destination", "").strip()
-    from_date   = request.form.get("from_date", "").strip()
-    to_date     = request.form.get("to_date", "").strip()
+    single_date = request.form.get("date", "").strip()
 
     rows         = []
     total_amount = 0
 
     if show_results:
         query = """
-            SELECT client_name, awb_no, destination,
+            SELECT code, awb_no, destination,
                    COUNT(*) AS sum_count, SUM(total_amount) AS amount
             FROM bookings WHERE 1=1
         """
         params = []
 
-        if client_name:
-            query += " AND client_name ILIKE %s"
-            params.append(f"%{client_name}%")
+        if client_code:
+            query += " AND code ILIKE %s"
+            params.append(f"%{client_code}%")
         if awb_no:
             query += " AND awb_no ILIKE %s"
             params.append(f"%{awb_no}%")
         if destination:
             query += " AND destination ILIKE %s"
             params.append(f"%{destination}%")
-        if from_date and to_date:
-            query += " AND booking_date BETWEEN %s AND %s"
-            params.extend([from_date, to_date])
+        if single_date:
+            query += " AND booking_date = %s"
+            params.append(single_date)
 
-        query += " GROUP BY client_name, awb_no, destination ORDER BY client_name"
+        query += " GROUP BY code, awb_no, destination ORDER BY code"
         cursor.execute(query, params)
         rows         = [dict(r) for r in cursor.fetchall()]
         total_amount = sum(r["amount"] for r in rows) if rows else 0
@@ -823,24 +822,24 @@ def booking_export():
 def sales_export():
     db     = get_db_connection()
     cursor = db.cursor()
-    query  = """SELECT client_name AS "Client Name", awb_no AS "AWB No",
+    query  = """SELECT code AS "Client Code", awb_no AS "AWB No",
                        destination AS "Destination", COUNT(*) AS "Sum",
                        SUM(total_amount) AS "Amount"
                 FROM bookings WHERE 1=1"""
     params = []
-    if request.form.get("client_name"):
-        query += " AND client_name ILIKE %s"
-        params.append(f"%{request.form['client_name']}%")
+    if request.form.get("client_code"):
+        query += " AND code ILIKE %s"
+        params.append(f"%{request.form['client_code']}%")
     if request.form.get("awb_no"):
         query += " AND awb_no ILIKE %s"
         params.append(f"%{request.form['awb_no']}%")
     if request.form.get("destination"):
         query += " AND destination ILIKE %s"
         params.append(f"%{request.form['destination']}%")
-    if request.form.get("from_date") and request.form.get("to_date"):
-        query += " AND booking_date BETWEEN %s AND %s"
-        params.extend([request.form["from_date"], request.form["to_date"]])
-    query += " GROUP BY client_name, awb_no, destination"
+    if request.form.get("date"):
+        query += " AND booking_date = %s"
+        params.append(request.form["date"])
+    query += " GROUP BY code, awb_no, destination ORDER BY code"
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
     output = io.BytesIO()
@@ -1077,32 +1076,31 @@ def sales_pdf():
     db     = get_db_connection()
     cursor = db.cursor()
 
-    client_name = request.form.get("client_name", "").strip()
+    client_code = request.form.get("client_code", "").strip()
     awb_no      = request.form.get("awb_no", "").strip()
     destination = request.form.get("destination", "").strip()
-    from_date   = request.form.get("from_date", "").strip()
-    to_date     = request.form.get("to_date", "").strip()
+    single_date = request.form.get("date", "").strip()
 
     query = """
-        SELECT client_name, awb_no, destination,
+        SELECT code, awb_no, destination,
                COUNT(*) AS sum_count, SUM(total_amount) AS amount
         FROM bookings WHERE 1=1
     """
     params = []
-    if client_name:
-        query += " AND client_name ILIKE %s"
-        params.append(f"%{client_name}%")
+    if client_code:
+        query += " AND code ILIKE %s"
+        params.append(f"%{client_code}%")
     if awb_no:
         query += " AND awb_no ILIKE %s"
         params.append(f"%{awb_no}%")
     if destination:
         query += " AND destination ILIKE %s"
         params.append(f"%{destination}%")
-    if from_date and to_date:
-        query += " AND booking_date BETWEEN %s AND %s"
-        params.extend([from_date, to_date])
+    if single_date:
+        query += " AND booking_date = %s"
+        params.append(single_date)
 
-    query += " GROUP BY client_name, awb_no, destination ORDER BY client_name"
+    query += " GROUP BY code, awb_no, destination ORDER BY code"
     cursor.execute(query, params)
     rows         = [dict(r) for r in cursor.fetchall()]
     total_amount = sum(r["amount"] for r in rows) if rows else 0
@@ -1124,21 +1122,21 @@ def sales_pdf():
     elements.append(Paragraph("Sales Checking Report", title_style))
 
     filter_text = []
-    if client_name: filter_text.append(f"Client: {client_name}")
+    if client_code: filter_text.append(f"Client Code: {client_code}")
     if awb_no:      filter_text.append(f"AWB: {awb_no}")
     if destination: filter_text.append(f"Destination: {destination}")
-    if from_date and to_date: filter_text.append(f"Period: {from_date} to {to_date}")
+    if single_date: filter_text.append(f"Date: {single_date}")
     if filter_text:
         elements.append(Paragraph(" | ".join(filter_text), normal_style))
     elements.append(Spacer(1, 12))
 
-    header = ['SNO', 'Client Name', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
+    header = ['SNO', 'Client Code', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
     data   = [header]
 
     for i, row in enumerate(rows, start=1):
         data.append([
             str(i),
-            Paragraph(row['client_name'] or '', name_style),
+            Paragraph(row['code'] or '', name_style),
             row['awb_no'] or '',
             row['destination'] or '',
             str(row['sum_count']),

@@ -7,8 +7,9 @@
 <div class="row g-2">
 
 <div class="col-md-3">
-    <label>Client Name</label>
-    <input name="client_name" id="client_name" class="form-control" value="{{ filters.client_name }}">
+    <label>Client Code</label>
+    <input name="client_code" id="client_code" class="form-control" 
+           placeholder="e.g. TPC" value="{{ filters.client_code }}">
 </div>
 <div class="col-md-3">
     <label>AWB No</label>
@@ -57,7 +58,7 @@
         <table class="table table-bordered table-sm">
             <thead class="table-dark">
                 <tr>
-                    <th>SNO</th><th>Client Name</th><th>AWB No</th>
+                    <th>SNO</th><th>Client Code</th><th>AWB No</th>
                     <th>Destination</th><th>Sum</th><th>Amount</th>
                 </tr>
             </thead>
@@ -65,7 +66,7 @@
                 {% for r in rows %}
                 <tr>
                     <td>{{ loop.index }}</td>
-                    <td>{{ r.client_name }}</td>
+                    <td>{{ r.code }}</td>
                     <td>{{ r.awb_no }}</td>
                     <td>{{ r.destination }}</td>
                     <td>{{ r.sum_count }}</td>
@@ -86,7 +87,7 @@
     const toggleBtn = document.getElementById('toggleBtn');
     const resultsDiv = document.getElementById('resultsContainer');
     const form = document.getElementById('salesForm');
-    const filterInputs = ['client_name', 'awb_no', 'destination', 'date'].map(id => document.getElementById(id));
+    const filterInputs = ['client_code', 'awb_no', 'destination', 'date'].map(id => document.getElementById(id));
 
     function setShowDataMode() {
         toggleBtn.innerHTML = '<i class="fa fa-search"></i> Show Data';
