@@ -11,7 +11,6 @@
 </h4>
 
 <div class="d-flex justify-content-between mb-2">
-    <!-- Search form -->
     <form method="get" class="d-flex gap-2">
         <input type="text" name="search" value="{{ search }}"
                class="form-control form-control-sm" placeholder="Search code / place…" style="width:220px">
@@ -83,67 +82,67 @@
 <form method="post" id="rate-form">
 <input type="hidden" name="_action" id="rate-action" value="add">
 <input type="hidden" name="edit_id" id="rate-edit-id" value="">
-<div class="row g-2 align-items-end">
+<!-- Zone hidden — auto computed, still submitted -->
+<input type="hidden" name="zone" id="r-zone" value="">
 
+<!-- ROW 1: CODE, COMPANY NAME, PLACE -->
+<div class="row g-2 mb-2">
     <div class="col-md-2">
-        <label>CODE</label>
+        <label class="form-label mb-1">CODE</label>
         <div class="ac-wrap">
             <input name="code" id="r-code" class="form-control" placeholder="e.g. MAS" required
-                   oninput="onCodePlaceChange()">
+       autocomplete="off">
+            <div class="ac-drop" id="r-code-drop"></div>
         </div>
+    </div>
+
+    <div class="col-md-5">
+        <label class="form-label mb-1">CODE FULLFORM</label>
+        <input name="code_fullform" id="r-fullform" class="form-control"
+               placeholder="Full company name" required autocomplete="off">
     </div>
 
     <div class="col-md-3">
-        <label>CODE FULLFORM</label>
-        <input name="code_fullform" id="r-fullform" class="form-control"
-               placeholder="Full company name" required>
-    </div>
-
-    <div class="col-md-2">
-        <label>PLACE</label>
+        <label class="form-label mb-1">PLACE</label>
         <div class="ac-wrap">
             <input name="place" id="r-place" class="form-control"
-                   placeholder="e.g. CHENNAI" required
+                   placeholder="e.g. CHENNAI" required autocomplete="off"
                    oninput="onPlaceInput(this.value)"
                    onblur="onPlaceBlur(this.value)"
                    onkeydown="onPlaceKeydown(event)">
+            <div class="ac-drop" id="r-place-drop"></div>
         </div>
     </div>
+</div>
 
+<!-- ROW 2: RATE SLABS + FSC + SAVE -->
+<div class="row g-2 align-items-end">
     <div class="col-md-1">
-        <label>Zone</label>
-        <input name="zone" id="r-zone" class="form-control fw-bold text-center"
-               readonly placeholder="Auto"
-               style="background:#f0f4ff;border:2px solid #6c8ebf;
-                      color:#1a3a6b;font-size:1.1rem;cursor:not-allowed;">
-    </div>
-
-    <div class="col-md-1">
-        <label class="small fw-semibold">250 GMS</label>
+        <label class="form-label mb-1 small fw-semibold">250 GMS</label>
         <input name="rate_250g" id="r-250g" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label class="small fw-semibold">500 GMS</label>
+        <label class="form-label mb-1 small fw-semibold">500 GMS</label>
         <input name="rate_500g" id="r-500g" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label class="small fw-semibold">1 KG</label>
+        <label class="form-label mb-1 small fw-semibold">1 KG</label>
         <input name="rate_500g_1" id="r-500g1" type="number" step="0.01" class="form-control" value="">
     </div>
-    <div class="col-md-1">
-        <label class="small fw-semibold">ABV 1KG/KG</label>
+    <div class="col-md-2">
+        <label class="form-label mb-1 small fw-semibold">ABV 1KG/KG</label>
         <input name="rate_1_to_3kg" id="r-1to3" type="number" step="0.01" class="form-control" value="">
     </div>
-    <div class="col-md-1">
-        <label class="small fw-semibold">ABV 3KG/KG</label>
+    <div class="col-md-2">
+        <label class="form-label mb-1 small fw-semibold">ABV 3KG/KG</label>
         <input name="rate_3_to_10kg" id="r-3to10" type="number" step="0.01" class="form-control" value="">
     </div>
-    <div class="col-md-1">
-        <label class="small fw-semibold">ABV 10KG/KG</label>
+    <div class="col-md-2">
+        <label class="form-label mb-1 small fw-semibold">ABV 10KG/KG</label>
         <input name="rate_above_10kg" id="r-10kg" type="number" step="0.01" class="form-control" value="">
     </div>
     <div class="col-md-1">
-        <label class="small fw-semibold">FSC %</label>
+        <label class="form-label mb-1 small fw-semibold">FSC %</label>
         <input name="fuel" id="r-fuel" type="number" step="0.01" class="form-control" placeholder="e.g. 12">
     </div>
 
@@ -156,8 +155,8 @@
                 style="display:none" onclick="rateCancel()">✕</button>
         {% endif %}
     </div>
-
 </div>
+
 </form>
 </div>
 
@@ -177,8 +176,12 @@
 {% for r in rates %}
 <tr id="rrow-{{ r.id }}">
     <td>{{ loop.index + ((page-1) * (limit|int if limit != 'all' else 0)) }}</td>
-    <td><strong>{{ r.code }}</strong></td>
-    <td>{{ r.code_fullform }}</td>
+    <td style="background:#dbeafe; color:#1e40af; font-weight:700; text-align:center;">
+        <span style="background:#1e40af; color:#fff; padding:2px 8px; border-radius:12px; font-size:12px;">
+            {{ r.code }}
+        </span>
+    </td>
+    <td style="background:#fef9c3; color:#854d0e; font-weight:600;">{{ r.code_fullform }}</td>
     <td>{{ r.place }}</td>
     <td>
         {% set zone_labels = {1:'Z1',2:'Z2',3:'Z3',4:'Z4',5:'Z5'} %}
@@ -234,9 +237,8 @@
 
 {% block scripts %}
 <script>
-// Role flag from server
 const IS_ADMIN = {{ 'true' if role == 'admin' else 'false' }};
-let isSubmitting = false;  // ← prevent double submission
+let isSubmitting = false;
 
 // ======================= ZONE DETECTION =======================
 function getZoneAndCorrectedPlace(originalPlace) {
@@ -255,14 +257,7 @@ function getZoneAndCorrectedPlace(originalPlace) {
 
 function applyZone(zoneNum) {
     const zf = document.getElementById("r-zone");
-    if (zoneNum) {
-        zf.value = zoneNum;
-        const colors = {1:"#cce5ff",2:"#d4edda",3:"#fff3cd",4:"#f8d7da",5:"#e2e3e5"};
-        zf.style.background = colors[zoneNum] || "#f0f4ff";
-    } else {
-        zf.value = "";
-        zf.style.background = "#f0f4ff";
-    }
+    zf.value = zoneNum || "";
 }
 
 function updatePlaceAndZone() {
@@ -272,59 +267,14 @@ function updatePlaceAndZone() {
     applyZone(zoneNum);
 }
 
-function onPlaceBlur(val)     { updatePlaceAndZone(); onCodePlaceChange(); }
-function onPlaceInput(val)    { applyZone(getZoneAndCorrectedPlace(val).zoneNum); }
+function onPlaceBlur(val)  { updatePlaceAndZone(); }
 function onPlaceKeydown(e) {
-    if (e.key === "Enter") { e.preventDefault(); updatePlaceAndZone(); onCodePlaceChange(); }
-    if (e.key === "Tab")   { updatePlaceAndZone(); onCodePlaceChange(); }
+    if (e.key === "Enter") { e.preventDefault(); updatePlaceAndZone(); }
+    if (e.key === "Tab")   { updatePlaceAndZone(); }
 }
 function setPlaceAndZone(v) {
     document.getElementById("r-place").value = v;
     updatePlaceAndZone();
-}
-
-// ======================= AUTO-FETCH RATES =======================
-let autoFetchTimer = null;
-function onCodePlaceChange() {
-    clearTimeout(autoFetchTimer);
-    autoFetchTimer = setTimeout(tryAutoFetch, 400);
-}
-async function tryAutoFetch() {
-    if (document.getElementById("rate-action").value === "edit") return;
-    const code  = document.getElementById("r-code").value.trim().toUpperCase();
-    const place = document.getElementById("r-place").value.trim().toUpperCase();
-    if (!code || !place) return;
-    const zoneNum = getZoneAndCorrectedPlace(place).zoneNum;
-    if (!zoneNum) return;
-    try {
-        const res  = await fetch(`/api/rate/lookup?code=${encodeURIComponent(code)}&zone=${zoneNum}`);
-        const data = await res.json();
-        if (data && data.id) {
-            document.getElementById("r-250g").value  = data.rate_250g       ?? "";
-            document.getElementById("r-500g").value  = data.rate_500g       ?? "";
-            document.getElementById("r-500g1").value = data.rate_500g_1     ?? "";
-            document.getElementById("r-1to3").value  = data.rate_1_to_3kg   ?? "";
-            document.getElementById("r-3to10").value = data.rate_3_to_10kg  ?? "";
-            document.getElementById("r-10kg").value  = data.rate_above_10kg ?? "";
-            document.getElementById("r-fuel").value  = data.fuel            ?? "";
-            if (data.zone) applyZone(data.zone);
-            showAutoFetchBadge();
-        }
-    } catch(e) { console.error("Auto-fetch error:", e); }
-}
-function showAutoFetchBadge() {
-    let b = document.getElementById("autofetch-badge");
-    if (!b) {
-        b = document.createElement("div");
-        b.id = "autofetch-badge";
-        b.style.cssText = "position:fixed;top:18px;right:24px;z-index:9999;background:#198754;" +
-            "color:#fff;padding:7px 16px;border-radius:8px;font-size:.9rem;" +
-            "box-shadow:0 2px 12px rgba(0,0,0,.2);transition:opacity .5s";
-        b.textContent = "✓ Rates auto-filled from existing record";
-        document.body.appendChild(b);
-    }
-    b.style.opacity = "1";
-    setTimeout(() => { b.style.opacity = "0"; }, 2500);
 }
 
 // ======================= AUTOCOMPLETE =======================
@@ -390,7 +340,7 @@ function escapeHtml(str) {
     return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
 }
 
-// ======================= TABLE ACTIONS (admin only) =======================
+// ======================= TABLE ACTIONS =======================
 function rateEdit(r) {
     if (!IS_ADMIN) return;
     document.getElementById("rate-action").value  = "edit";
@@ -422,7 +372,6 @@ function rateCopy(r) {
     document.getElementById("rate-edit-id").value     = "";
     document.getElementById("r-place").value          = "";
     document.getElementById("r-zone").value           = "";
-    document.getElementById("r-zone").style.background = "#f0f4ff";
     document.getElementById("r-fuel").value           = r.fuel ?? "";
     document.getElementById("r-save-lbl").textContent = "Save";
     document.getElementById("r-place").focus();
@@ -434,7 +383,7 @@ function rateCancel() {
     ["r-code","r-fullform","r-place"].forEach(id => document.getElementById(id).value = "");
     ["r-250g","r-500g","r-500g1","r-1to3","r-3to10","r-10kg","r-fuel"]
         .forEach(id => document.getElementById(id).value = "");
-    applyZone(null);
+    document.getElementById("r-zone").value = "";
     document.getElementById("r-save-lbl").textContent = "Save";
     const cancelBtn = document.getElementById("r-cancel-btn");
     if (cancelBtn) cancelBtn.style.display = "none";
@@ -454,28 +403,20 @@ document.getElementById('limit-select').addEventListener('change', function() {
     window.location.href = url.toString();
 });
 
-// ======================= DOUBLE-CLICK PREVENTION =======================
-const rateForm = document.getElementById('rate-form');
-const submitBtn = document.getElementById('rate-submit-btn');
+// ======================= FORM SUBMIT =======================
+const rateForm   = document.getElementById('rate-form');
+const submitBtn  = document.getElementById('rate-submit-btn');
 const saveLabelSpan = document.getElementById('r-save-lbl');
 
 if (rateForm) {
     rateForm.addEventListener('submit', function(e) {
-        if (isSubmitting) {
-            e.preventDefault();
-            return false;
-        }
+        if (isSubmitting) { e.preventDefault(); return false; }
         isSubmitting = true;
         submitBtn.disabled = true;
         const originalText = saveLabelSpan.innerText;
         saveLabelSpan.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
-        // The form will submit normally; after page reload the button state is reset.
-        // If the submission fails (e.g., network error), we could re-enable, but since
-        // the page reloads on success, no need. For safety, we set a timeout to re-enable
-        // after 10 seconds (just in case the server is very slow).
         setTimeout(() => {
             if (isSubmitting) {
-                // Re-enable only if still submitting (should not happen on normal reload)
                 isSubmitting = false;
                 submitBtn.disabled = false;
                 saveLabelSpan.innerHTML = originalText;
@@ -486,24 +427,36 @@ if (rateForm) {
 
 // ======================= INIT =======================
 document.addEventListener("DOMContentLoaded", () => {
-    bindAC(
-        document.getElementById("r-code"),
-        "/api/ac/code?q=",
-        item => {
-            document.getElementById("r-code").value     = item.code;
-            document.getElementById("r-fullform").value = item.code_fullform;
-            onCodePlaceChange();
-        },
-        item => item.code,
-        item => item.code_fullform
-    );
-    bindAC(
-        document.getElementById("r-place"),
-        "/api/ac/place?q=",
-        v => { setPlaceAndZone(v); onCodePlaceChange(); },
-        v => v, null
-    );
+bindAC(
+    document.getElementById("r-code"),
+    "/api/ac/code?q=",
+    item => {
+        document.getElementById("r-code").value     = item.code;
+        document.getElementById("r-fullform").value = item.code_fullform;
+    },
+    item => item.code,
+    item => item.code_fullform
+);
+bindAC(
+    document.getElementById("r-place"),
+    "/api/ac/place?q=",
+    v => { setPlaceAndZone(v); },
+    v => v, null
+);
     updatePlaceAndZone();
 });
 </script>
+
+<style>
+.ac-drop { display:none; position:absolute; z-index:1000; background:#fff; border:1px solid #ccc; max-height:200px; overflow-y:auto; width:100%; }
+.ac-drop.open { display:block; }
+.ac-item { padding:6px 10px; cursor:pointer; border-bottom:1px solid #eee; }
+.ac-item.hi { background:#e0e8ff; }
+.ac-sub { font-size:11px; color:#6c757d; }
+.ac-wrap { position:relative; }
+.editing-row { background:#fff8dc !important; outline:2px solid #ffc107; }
+/* Row dividers in form */
+#rate-form .row { padding-bottom: 4px; }
+#rate-form .row + .row { border-top: 1px dashed #dee2e6; padding-top: 8px; }
+</style>
 {% endblock %}
