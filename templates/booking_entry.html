@@ -37,35 +37,41 @@
 <input type="hidden" name="_action"  id="bk-action"  value="add">
 <input type="hidden" name="edit_id"  id="bk-edit-id" value="">
 <input type="hidden" name="fuel"     value="0">
-<div class="row g-2">
+<!-- Zone is hidden — auto computed, still submitted -->
+<input type="hidden" name="zone" id="bk-zone" value="">
 
-    <!-- ROW 1: CODE, COMPANY NAME, DATE, AWB NO, DESTINATION, WEIGHT -->
-    <div class="col-md-1">
-        <label>CODE</label>
+<!-- ===== ROW 1: CODE, COMPANY NAME, DATE ===== -->
+<div class="row g-2 mb-2">
+    <div class="col-md-2">
+        <label class="form-label mb-1">CODE</label>
         <div class="ac-wrap">
             <input name="code" id="bk-code" class="form-control" placeholder="e.g. SBH" required autocomplete="off">
             <div class="ac-drop" id="bk-code-drop"></div>
         </div>
     </div>
-    <div class="col-md-3">
-        <label>Company Name</label>
+    <div class="col-md-7">
+        <label class="form-label mb-1">Company Name</label>
         <input name="code_fullform" id="bk-code-fullform" class="form-control"
                placeholder="Auto-filled on code select" autocomplete="off">
     </div>
-    <div class="col-md-2">
-        <label>DATE</label>
+    <div class="col-md-3">
+        <label class="form-label mb-1">DATE</label>
         <input type="date" name="booking_date" id="bk-date" class="form-control" required>
     </div>
-    <div class="col-md-2">
-        <label>AWB NO</label>
+</div>
+
+<!-- ===== ROW 2: AWB NO, DESTINATION, WEIGHT, AMOUNT ===== -->
+<div class="row g-2 mb-2">
+    <div class="col-md-3">
+        <label class="form-label mb-1">AWB NO</label>
         <input name="awb_no" id="bk-awb" class="form-control" autocomplete="off" placeholder="AWB number">
         <div id="awb-warn" style="display:none;color:#dc3545;font-size:11px;margin-top:3px;">
             <i class="fa fa-circle-exclamation"></i>
             <span id="awb-warn-text"></span>
         </div>
     </div>
-    <div class="col-md-2">
-        <label>DESTINATION</label>
+    <div class="col-md-3">
+        <label class="form-label mb-1">DESTINATION</label>
         <div class="ac-wrap">
             <input name="destination" id="bk-dest" class="form-control" autocomplete="off"
                    placeholder="City / place or code"
@@ -76,26 +82,16 @@
         </div>
         <div id="zone-badge-wrap" style="margin-top:4px; min-height:22px;"></div>
     </div>
-    <div class="col-md-1">
-        <label>WEIGHT</label>
+    <div class="col-md-2">
+        <label class="form-label mb-1">WEIGHT</label>
         <input type="number" step="0.001" name="weight" id="bk-weight" class="form-control" placeholder="0.000" oninput="onWeightInput()">
     </div>
-
-    <!-- ROW 2: COURIER, ZONE (hidden), AMOUNT, SAVE -->
     <div class="col-md-2">
-        <label>COURIER</label>
-        <input name="courier" id="bk-courier" class="form-control" value="ST COURIER">
-    </div>
-    <!-- Zone is hidden — auto computed, still submitted -->
-    <input type="hidden" name="zone" id="bk-zone" value="">
-    <div class="col-md-2">
-        <label>Amount</label>
+        <label class="form-label mb-1">Amount</label>
         <input type="number" step="0.01" name="auto_amount" id="bk-auto" class="form-control" placeholder="0.00">
     </div>
-    <div class="col-12">
-        <div id="rate-info" style="font-size:12px; min-height:18px; margin-top:2px;"></div>
-    </div>
-    <div class="col-md-2 d-flex align-items-end gap-1">
+    <!-- Save button aligned to Row 2 -->
+    <div class="col-md-2 d-flex align-items-start gap-1" style="padding-top:24px;">
         <button type="submit" class="btn btn-success flex-fill btn-submit" id="bk-submit-btn">
             <i class="fa fa-save"></i> <span id="bk-save-lbl">Save</span>
         </button>
@@ -103,6 +99,22 @@
                 style="display:none" onclick="bkCancel()">&#x2715;</button>
     </div>
 </div>
+
+<!-- ===== ROW 3: COURIER ===== -->
+<div class="row g-2 mb-2">
+    <div class="col-md-3">
+        <label class="form-label mb-1">COURIER</label>
+        <input name="courier" id="bk-courier" class="form-control" value="ST COURIER">
+    </div>
+</div>
+
+<!-- Rate info bar -->
+<div class="row">
+    <div class="col-12">
+        <div id="rate-info" style="font-size:12px; min-height:18px; margin-top:2px;"></div>
+    </div>
+</div>
+
 </form>
 </div>
 
@@ -454,14 +466,30 @@ async function deleteBooking(id) {
   bkCancel();
 }
 
+// ---------- CLEAR ROW 2 ONLY (after save) ----------
+// Clears: AWB, Destination, Weight, Amount, Zone badge, rate-info
+// Keeps:  Code, Company Name, Date, Courier
+function clearRow2() {
+  clearAwbWarning();
+  document.getElementById("bk-awb").value   = "";
+  document.getElementById("bk-dest").value  = "";
+  document.getElementById("bk-weight").value = "";
+  document.getElementById("bk-auto").value  = "";
+  clearZone();
+  document.getElementById("rate-info").textContent = "";
+  pendingDest = null;
+  lastRateRow = null;
+}
+
 // ---------- FORM SUBMIT ----------
 document.getElementById('bk-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (isSubmitting) return;
-  const submitBtn  = document.getElementById('bk-submit-btn');
-  const saveSpan   = document.getElementById('bk-save-lbl');
+  const submitBtn    = document.getElementById('bk-submit-btn');
+  const saveSpan     = document.getElementById('bk-save-lbl');
   const originalText = saveSpan.innerText;
-  isSubmitting     = true;
+  const isEdit       = document.getElementById('bk-action').value === 'edit';
+  isSubmitting       = true;
   submitBtn.disabled = true;
   saveSpan.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
   try {
@@ -469,12 +497,21 @@ document.getElementById('bk-form').addEventListener('submit', async (e) => {
     const resp = await fetch('/booking-entry', { method:'POST', body:fd });
     if (!resp.ok) { alert('Server error – could not save.'); return; }
     await loadTable(currentView);
-    bkCancel();
+
+    if (isEdit) {
+      // Full cancel on edit — reset everything
+      bkCancel();
+    } else {
+      // New entry — only clear Row 2, keep Row 1 for next entry
+      clearRow2();
+      document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
+    }
+
     const infoDiv = document.getElementById('rate-info');
-    infoDiv.style.color   = '#198754';
-    infoDiv.innerHTML = '✓ Saved successfully. Form cleared for next entry.';
+    infoDiv.style.color = '#198754';
+    infoDiv.innerHTML   = '✓ Saved successfully. Enter next AWB.';
     setTimeout(() => { if (infoDiv.innerHTML.includes('Saved')) infoDiv.innerHTML = ''; }, 2500);
-    document.getElementById('bk-code').focus();
+    document.getElementById('bk-awb').focus();
   } catch (err) {
     console.error(err); alert('Network error – could not save.');
   } finally {
@@ -493,18 +530,18 @@ document.getElementById('btn-show-all').addEventListener('click', () => {
 // ---------- EDIT / COPY / CANCEL ----------
 function bkEdit(b) {
   clearAwbWarning();
-  document.getElementById("bk-action").value       = "edit";
-  document.getElementById("bk-edit-id").value      = b.id;
-  document.getElementById("bk-code").value         = b.code || "";
+  document.getElementById("bk-action").value        = "edit";
+  document.getElementById("bk-edit-id").value       = b.id;
+  document.getElementById("bk-code").value          = b.code || "";
   document.getElementById("bk-code-fullform").value = b.code_fullform || "";
-  document.getElementById("bk-date").value         = b.booking_date || "";
-  document.getElementById("bk-awb").value          = b.awb_no || "";
-  document.getElementById("bk-dest").value         = b.destination || "";
-  document.getElementById("bk-weight").value       = b.weight || "";
-  document.getElementById("bk-courier").value      = b.courier || "ST COURIER";
-  document.getElementById("bk-auto").value         = b.auto_amount || "";
+  document.getElementById("bk-date").value          = b.booking_date || "";
+  document.getElementById("bk-awb").value           = b.awb_no || "";
+  document.getElementById("bk-dest").value          = b.destination || "";
+  document.getElementById("bk-weight").value        = b.weight || "";
+  document.getElementById("bk-courier").value       = b.courier || "ST COURIER";
+  document.getElementById("bk-auto").value          = b.auto_amount || "";
   if (b.zone) { const zoneNum = parseInt(b.zone); if (!isNaN(zoneNum)) applyZone(b.destination, zoneNum, "saved"); }
-  document.getElementById("bk-save-lbl").textContent  = "Update";
+  document.getElementById("bk-save-lbl").textContent    = "Update";
   document.getElementById("bk-cancel-btn").style.display = "inline-block";
   document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
   const row = document.getElementById("brow-" + b.id);
@@ -522,6 +559,7 @@ function bkCopy(b) {
   document.getElementById("bk-save-lbl").textContent = "Save";
 }
 
+// Full cancel — resets ALL fields
 function bkCancel() {
   clearAwbWarning();
   document.getElementById("bk-action").value        = "add";
@@ -535,9 +573,9 @@ function bkCancel() {
   document.getElementById("bk-auto").value          = "";
   document.getElementById("bk-date").value          = new Date().toISOString().split("T")[0];
   clearZone();
-  document.getElementById("bk-save-lbl").textContent    = "Save";
+  document.getElementById("bk-save-lbl").textContent     = "Save";
   document.getElementById("bk-cancel-btn").style.display = "none";
-  document.getElementById("rate-info").textContent      = "";
+  document.getElementById("rate-info").textContent       = "";
   document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
   pendingDest = null; lastRateRow = null;
 }
@@ -565,8 +603,8 @@ awbInput.addEventListener("keydown", e => {
 
 // ---------- SEARCH ----------
 function filterTable() {
-  const q       = document.getElementById('searchInput').value.toLowerCase().trim();
-  const rows    = Array.from(document.getElementById('booking-table-body').getElementsByTagName('tr'));
+  const q        = document.getElementById('searchInput').value.toLowerCase().trim();
+  const rows     = Array.from(document.getElementById('booking-table-body').getElementsByTagName('tr'));
   const clearBtn = document.getElementById('btn-clear-search');
   let shown = 0, total = 0;
   const oldInfo = document.getElementById('search-info-row'); if (oldInfo) oldInfo.remove();
@@ -592,10 +630,7 @@ function filterTable() {
   }
 }
 function clearSearch() { document.getElementById('searchInput').value = ''; document.getElementById('btn-clear-search').style.display = 'none'; filterTable(); }
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') filterTable(); });
-  document.getElementById('searchInput').addEventListener('input', filterTable);
-});
+
 
 // ---------- AUTOCOMPLETE ----------
 function setupAC(inputId, url, onSelect, labelFn, subFn) {
@@ -645,6 +680,8 @@ function onCodeSelect(item) {
   document.getElementById("bk-code-fullform").value = item.code_fullform || "";
   const dest = document.getElementById("bk-dest").value.trim();
   if (dest) resolveDestination(dest);
+  // Move cursor to AWB after code is selected
+  setTimeout(() => document.getElementById("bk-awb").focus(), 50);
 }
 function onDestACSelect(v) { setVal("bk-dest", v); resolveDestination(v); }
 
@@ -738,7 +775,7 @@ function renderInlinePreview() {
                 <td class="text-center"><span class="badge bg-danger">❌ Skip</span></td>
             `;
         } else {
-            const zc     = ZONE_COLORS[row.zone] || ZONE_COLORS[5];
+            const zc       = ZONE_COLORS[row.zone] || ZONE_COLORS[5];
             const amtStyle = (!row.auto_amount || row.auto_amount == 0) ? 'color:#dc3545; font-weight:bold;' : 'color:#198754; font-weight:bold;';
             tr.innerHTML = `
                 <td class="text-center text-muted">${idx+1}</td>
@@ -809,6 +846,29 @@ async function doSaveAll() {
 document.getElementById('saveAllPreviewBtn').addEventListener('click', doSaveAll);
 document.getElementById('saveAllPreviewBtn2').addEventListener('click', doSaveAll);
 
+// ---------- CODE MANUAL ENTRY — auto-fill company + jump to AWB ----------
+document.getElementById("bk-code").addEventListener("keydown", async (e) => {
+  if (e.key === "Tab" || e.key === "Enter") {
+    const code = document.getElementById("bk-code").value.trim();
+    if (!code) return;
+    // Only fetch if company name not already filled
+    if (!document.getElementById("bk-code-fullform").value.trim()) {
+      try {
+        const data = await fetch(`/api/ac/code?q=${encodeURIComponent(code)}`).then(r => r.json());
+        const match = data.find(d => d.code.toUpperCase() === code.toUpperCase());
+        if (match) {
+          document.getElementById("bk-code-fullform").value = match.code_fullform || "";
+        }
+      } catch(e) {}
+    }
+    // Jump to AWB on Enter (Tab already moves focus naturally)
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.getElementById("bk-awb").focus();
+    }
+  }
+});
+
 // ---------- INIT ----------
 document.addEventListener("DOMContentLoaded", () => {
     const d = document.getElementById("bk-date");
@@ -818,6 +878,13 @@ document.addEventListener("DOMContentLoaded", () => {
     loadTable('recent');
     setupAC("bk-code", "/api/ac/code?q=", onCodeSelect, i => i.code, i => i.code_fullform);
     setupAC("bk-dest", "/api/ac/destination?q=", onDestACSelect);
+
+    document.getElementById("bk-auto").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("bk-form").requestSubmit();
+  }
+});
 });
 </script>
 
@@ -843,5 +910,9 @@ document.addEventListener("DOMContentLoaded", () => {
 #previewTable tbody tr:hover td { background:rgba(13,110,253,0.04); }
 #previewTable .preview-input { font-size:12px; padding:3px 6px; height:28px; border-radius:4px; }
 #previewTable .preview-input:focus { border-color:#0d6efd; box-shadow:0 0 0 2px rgba(13,110,253,.15); }
+
+/* Row dividers in form */
+#bk-form .row { padding-bottom: 4px; }
+#bk-form .row + .row { border-top: 1px dashed #dee2e6; padding-top: 8px; }
 </style>
 {% endblock %}

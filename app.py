@@ -1137,13 +1137,14 @@ def sales_pdf():
         elements.append(Paragraph(" | ".join(filter_text), normal_style))
     elements.append(Spacer(1, 12))
 
-    header = ['SNO', 'Code', 'Company Name', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
+    # ✅ Code column removed from header
+    header = ['SNO', 'Company Name', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
     data   = [header]
 
     for i, row in enumerate(rows, start=1):
         data.append([
             str(i),
-            row['code'] or '',
+            # ✅ Code removed, Company Name gets more space
             Paragraph(row['code_fullform'] or '', name_style),
             row['awb_no'] or '',
             row['destination'] or '',
@@ -1151,9 +1152,11 @@ def sales_pdf():
             f"{row['amount']:.2f}"
         ])
 
-    data.append(['', '', '', '', '', 'Total:', f"{total_amount:.2f}"])
+    data.append(['', '', '', '', 'Total:', f"{total_amount:.2f}"])
 
-    col_widths = [20, 35, 115, 80, 100, 30, 55]
+    # ✅ Widths redistributed — A4 usable width ~555pt (595 - 20 - 20)
+    col_widths = [25, 150, 110, 120, 40, 65]  # sum = 510, fits comfortably
+
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND',    (0, 0),  (-1, 0),  colors.grey),
@@ -1165,14 +1168,15 @@ def sales_pdf():
         ('BACKGROUND',    (0, 1),  (-1, -2), colors.beige),
         ('FONTNAME',      (0, 1),  (-1, -1), 'Helvetica'),
         ('FONTSIZE',      (0, 1),  (-1, -1), 9),
-        ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),
-        ('ALIGN',         (5, 1),  (6,  -1), 'RIGHT'),
+        ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),   # SNO center
+        # ✅ Fixed column indices: Count=col4, Amount=col5
+        ('ALIGN',         (4, 1),  (5,  -1), 'RIGHT'),
         ('VALIGN',        (0, 0),  (-1, -1), 'MIDDLE'),
         ('GRID',          (0, 0),  (-1, -2), 0.5, colors.grey),
         ('LINEABOVE',     (0, -1), (-1, -1), 1,   colors.black),
         ('BACKGROUND',    (0, -1), (-1, -1), colors.lavender),
         ('FONTNAME',      (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('ALIGN',         (5, -1), (6,  -1), 'RIGHT'),
+        ('ALIGN',         (4, -1), (5,  -1), 'RIGHT'),    # Total row right-aligned
     ]))
 
     elements.append(table)
