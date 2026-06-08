@@ -964,15 +964,22 @@ def invoice_pdf():
                                  spaceAfter=4, fontName='Helvetica-Bold')
     sub_style   = ParagraphStyle('sub',   fontSize=9,  alignment=TA_CENTER,
                                  spaceAfter=8, textColor=colors.grey)
+    between_style = ParagraphStyle('between', fontSize=10, alignment=TA_CENTER,
+                                   spaceAfter=6, fontName='Helvetica-Bold',
+                                   textColor=colors.HexColor('#212529'))
 
     elements = []
-    elements.append(Paragraph("Professional Couriers", title_style))
-    title_text = "Invoice / Statement"
-    if filter_code:
-        title_text += f"  -  {filter_code}"
-    elements.append(Paragraph(title_text, title_style))
+
+    # ── Main title ──
+    elements.append(Paragraph("Z XPRESS", title_style))
+
+    # ── Statement of Transaction with dates ──
     if from_date and to_date:
-        elements.append(Paragraph(f"Transaction Period: {from_date}  to  {to_date}", sub_style))
+        between_text = f"STATEMENT OF TRANSACTION BETWEEN &nbsp; {from_date} &nbsp; AND &nbsp; {to_date}"
+    else:
+        between_text = "STATEMENT OF TRANSACTION"
+    elements.append(Paragraph(between_text, between_style))
+
     if fuel_percent > 0:
         elements.append(Paragraph(f"Fuel Surcharge: {fuel_percent:.2f}%", sub_style))
     elements.append(Spacer(1, 4*mm))
@@ -1073,7 +1080,6 @@ def invoice_pdf():
 
     return send_file(buf, as_attachment=True, download_name=fname,
                      mimetype='application/pdf')
-
 # ============================================================
 # SALES PDF
 # ============================================================
@@ -1485,4 +1491,4 @@ def _keyword_zone(dest):
 # RUN
 # ============================================================
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', port=3000)
