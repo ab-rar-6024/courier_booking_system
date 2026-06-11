@@ -187,7 +187,7 @@
 <div class="card p-3">
     <div class="mb-2 d-flex gap-2 align-items-center">
         <input type="text" id="searchInput" class="form-control" placeholder="Search by any field (AWB, destination, code, company...)">
-        <button type="button" class="btn btn-primary" id="btn-search" onclick="filterTable()"><i class="fa fa-search"></i> Search</button>
+        <button type="button" class="btn btn-primary" id="btn-search" onclick="triggerSearch()"><i class="fa fa-search"></i> Search</button>
         <button type="button" class="btn btn-outline-secondary" id="btn-clear-search" onclick="clearSearch()" style="display:none;" title="Clear search"><i class="fa fa-times"></i></button>
     </div>
     <div id="search-count" style="font-size:13px; color:#555; margin-bottom:8px; min-height:20px;"></div>
@@ -247,13 +247,15 @@
 // ------------------------------------------------------------
 // GLOBALS
 // ------------------------------------------------------------
-let currentView = 'recent';
-const destCache = {};
-let destTimer   = null;
-let pendingDest = null;
-let lastRateRow = null;
-let previewData = [];
-let isSubmitting = false;
+let currentView   = 'recent';
+let allDataLoaded = false;   // ← tracks whether full dataset is in the DOM
+const destCache   = {};
+let destTimer     = null;
+let pendingDest   = null;
+let lastRateRow   = null;
+let previewData   = [];
+let isSubmitting  = false;
+let searchTimer   = null;
 
 const escapeHtml = (s) => { if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); };
 const esc = escapeHtml;
@@ -422,38 +424,23 @@ async function loadTable(view) {
   const loadingDiv = document.getElementById('table-loading');
   loadingDiv.style.display = 'block';
   tbody.innerHTML  = '<tr><td colspan="10" class="text-center">Loading......</td></tr>';
-  document.getElementById('searchInput').value       = '';
+  document.getElementById('searchInput').value        = '';
   document.getElementById('search-count').textContent = '';
   document.getElementById('btn-clear-search').style.display = 'none';
+
+  const isAll = (view === 'all');
+  allDataLoaded   = isAll;
+
   try {
-    const url  = view === 'all' ? '/api/bookings?limit=all' : '/api/bookings?limit=10';
+    const url  = isAll ? '/api/bookings?limit=all' : '/api/bookings?limit=10';
     const rows = await fetch(url).then(r => r.json());
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="10" class="text-center">No Records</td></tr>';
       document.getElementById('search-count').textContent = 'Showing 0 – 0 of 0 entries';
+      loadingDiv.style.display = 'none';
       return;
     }
-    tbody.innerHTML = rows.map((b,i) => `
-      <tr id="brow-${b.id}">
-        <td>${i+1}</td>
-        <td style="background:#dbeafe; color:#1e40af; font-weight:700; text-align:center;">
-  <strong>${esc(b.code)}</strong>
-</td>
-<td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:#fef9c3; color:#854d0e; font-weight:600;" title="${esc(b.code_fullform||'')}">
-  ${esc(b.code_fullform||'')}
-</td>
-        <td>${esc(b.booking_date)}</td>
-        <td>${esc(b.awb_no)}</td>
-        <td>${esc(b.destination)}</td>
-        <td>${b.weight}</td>
-        <td>${esc(b.courier)}</td>
-        <td>${b.auto_amount}</td>
-        <td style="white-space:nowrap">
-          <button class="btn btn-warning btn-act btn-sm" onclick='bkEdit(${JSON.stringify(b)})'><i class="fa fa-pen"></i></button>
-          <button class="btn btn-info btn-act btn-sm text-white" onclick='bkCopy(${JSON.stringify(b)})'><i class="fa fa-copy"></i></button>
-          <button class="btn btn-danger btn-act btn-sm" onclick="deleteBooking(${b.id})"><i class="fa fa-trash"></i></button>
-        </td>
-      </tr>`).join("");
+    renderRows(rows);
     filterTable();
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Failed to load</td></tr>';
@@ -462,25 +449,109 @@ async function loadTable(view) {
   }
 }
 
+function renderRows(rows) {
+  const tbody = document.getElementById('booking-table-body');
+  tbody.innerHTML = rows.map((b,i) => `
+    <tr id="brow-${b.id}">
+      <td>${i+1}</td>
+      <td style="background:#dbeafe; color:#1e40af; font-weight:700; text-align:center;">
+        <strong>${esc(b.code)}</strong>
+      </td>
+      <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:#fef9c3; color:#854d0e; font-weight:600;" title="${esc(b.code_fullform||'')}">
+        ${esc(b.code_fullform||'')}
+      </td>
+      <td>${esc(b.booking_date)}</td>
+      <td>${esc(b.awb_no)}</td>
+      <td>${esc(b.destination)}</td>
+      <td>${b.weight}</td>
+      <td>${esc(b.courier)}</td>
+      <td>${b.auto_amount}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-warning btn-act btn-sm" onclick='bkEdit(${JSON.stringify(b)})'><i class="fa fa-pen"></i></button>
+        <button class="btn btn-info btn-act btn-sm text-white" onclick='bkCopy(${JSON.stringify(b)})'><i class="fa fa-copy"></i></button>
+        <button class="btn btn-danger btn-act btn-sm" onclick="deleteBooking(${b.id})"><i class="fa fa-trash"></i></button>
+      </td>
+    </tr>`).join("");
+}
+
+// ---------- SEARCH ----------
+// If all data is not yet loaded, fetch everything first then filter.
+async function triggerSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) { filterTable(); return; }
+  if (!allDataLoaded) {
+    const loadingDiv = document.getElementById('table-loading');
+    const countEl   = document.getElementById('search-count');
+    loadingDiv.style.display = 'block';
+    countEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Loading all records for search…';
+    try {
+      const rows = await fetch('/api/bookings?limit=all').then(r => r.json());
+      allDataLoaded = true;
+      currentView   = 'all';
+      renderRows(rows);
+    } catch(e) {
+      countEl.textContent = 'Failed to load records.';
+      loadingDiv.style.display = 'none';
+      return;
+    } finally {
+      loadingDiv.style.display = 'none';
+    }
+  }
+  filterTable();
+}
+
+function filterTable() {
+  const q        = document.getElementById('searchInput').value.toLowerCase().trim();
+  const rows     = Array.from(document.getElementById('booking-table-body').getElementsByTagName('tr'));
+  const clearBtn = document.getElementById('btn-clear-search');
+  let shown = 0, total = 0;
+  const oldInfo = document.getElementById('search-info-row'); if (oldInfo) oldInfo.remove();
+  for (const row of rows) {
+    if (row.cells.length === 1 && row.cells[0].colSpan > 1) continue;
+    total++;
+    let text = ''; for (let i=0; i<row.cells.length-1; i++) text += row.cells[i].innerText.toLowerCase() + ' ';
+    const show = !q || text.includes(q);
+    row.style.display = show ? '' : 'none';
+    if (show) shown++;
+  }
+  const countEl = document.getElementById('search-count');
+  if (total > 0) countEl.innerHTML = q
+    ? `Showing <strong>${shown}</strong> of ${total} entries <span style="color:#0d6efd;">(filtered by "<strong>${esc(q)}</strong>")</span>`
+    : `Showing 1 – ${shown} of ${total} entries`;
+  else countEl.textContent = '';
+  clearBtn.style.display = q ? 'inline-block' : 'none';
+  if (shown === 0 && q) {
+    const tbody   = document.getElementById('booking-table-body');
+    const infoRow = tbody.insertRow(); infoRow.id = 'search-info-row';
+    const cell    = infoRow.insertCell(0); cell.colSpan = 10; cell.className = 'text-center text-muted py-3';
+    cell.innerHTML = `<i class="fa fa-search"></i> No records found matching "<strong>${esc(q)}</strong>"`;
+  }
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('btn-clear-search').style.display = 'none';
+  filterTable();
+}
+
 // ---------- DELETE ----------
 async function deleteBooking(id) {
   if (!confirm('Delete this booking?')) return;
   const fd = new FormData();
   fd.append('_action','delete'); fd.append('del_id', id);
   await fetch('/booking-entry', { method:'POST', body:fd });
-  await loadTable(currentView);
+  allDataLoaded = false;
+  await loadTable(currentView === 'all' ? 'all' : 'recent');
   bkCancel();
 }
 
 // ---------- CLEAR ROW 2 ONLY (after save) ----------
-// Clears: AWB, Destination, Weight, Amount, Zone badge, rate-info
-// Keeps:  Code, Company Name, Date, Courier
 function clearRow2() {
   clearAwbWarning();
-  document.getElementById("bk-awb").value   = "";
-  document.getElementById("bk-dest").value  = "";
+  document.getElementById("bk-awb").value    = "";
+  document.getElementById("bk-dest").value   = "";
   document.getElementById("bk-weight").value = "";
-  document.getElementById("bk-auto").value  = "";
+  document.getElementById("bk-auto").value   = "";
   clearZone();
   document.getElementById("rate-info").textContent = "";
   pendingDest = null;
@@ -502,13 +573,12 @@ document.getElementById('bk-form').addEventListener('submit', async (e) => {
     const fd   = new FormData(e.target);
     const resp = await fetch('/booking-entry', { method:'POST', body:fd });
     if (!resp.ok) { alert('Server error – could not save.'); return; }
-    await loadTable(currentView);
+    allDataLoaded = false;
+    await loadTable(currentView === 'all' ? 'all' : 'recent');
 
     if (isEdit) {
-      // Full cancel on edit — reset everything
       bkCancel();
     } else {
-      // New entry — only clear Row 2, keep Row 1 for next entry
       clearRow2();
       document.querySelectorAll(".editing-row").forEach(el => el.classList.remove("editing-row"));
     }
@@ -528,9 +598,16 @@ document.getElementById('bk-form').addEventListener('submit', async (e) => {
 });
 
 // ---------- VIEW SWITCH ----------
-document.getElementById('btn-show-recent').addEventListener('click', () => { currentView = 'recent'; loadTable('recent'); });
+document.getElementById('btn-show-recent').addEventListener('click', () => {
+  currentView   = 'recent';
+  allDataLoaded = false;
+  loadTable('recent');
+});
 document.getElementById('btn-show-all').addEventListener('click', () => {
-  if (confirm('Showing all records may be slow. Continue?')) { currentView = 'all'; loadTable('all'); }
+  if (confirm('Showing all records may be slow. Continue?')) {
+    currentView   = 'all';
+    loadTable('all');
+  }
 });
 
 // ---------- EDIT / COPY / CANCEL ----------
@@ -565,7 +642,6 @@ function bkCopy(b) {
   document.getElementById("bk-save-lbl").textContent = "Save";
 }
 
-// Full cancel — resets ALL fields
 function bkCancel() {
   clearAwbWarning();
   document.getElementById("bk-action").value        = "add";
@@ -606,37 +682,6 @@ awbInput.addEventListener("input", () => {
 awbInput.addEventListener("keydown", e => {
   if (awbDuplicate && (e.key==="Tab"||e.key==="Enter")) { e.preventDefault(); e.stopImmediatePropagation(); awbInput.focus(); }
 });
-
-// ---------- SEARCH ----------
-function filterTable() {
-  const q        = document.getElementById('searchInput').value.toLowerCase().trim();
-  const rows     = Array.from(document.getElementById('booking-table-body').getElementsByTagName('tr'));
-  const clearBtn = document.getElementById('btn-clear-search');
-  let shown = 0, total = 0;
-  const oldInfo = document.getElementById('search-info-row'); if (oldInfo) oldInfo.remove();
-  for (const row of rows) {
-    if (row.cells.length === 1 && row.cells[0].colSpan > 1) continue;
-    total++;
-    let text = ''; for (let i=0; i<row.cells.length-1; i++) text += row.cells[i].innerText.toLowerCase() + ' ';
-    const show = !q || text.includes(q);
-    row.style.display = show ? '' : 'none';
-    if (show) shown++;
-  }
-  const countEl = document.getElementById('search-count');
-  if (total > 0) countEl.innerHTML = q
-    ? `Showing ${shown} – ${shown} of ${total} entries <span style="color:#0d6efd;">(filtered by "<strong>${esc(q)}</strong>")</span>`
-    : `Showing 1 – ${shown} of ${total} entries`;
-  else countEl.textContent = '';
-  clearBtn.style.display = q ? 'inline-block' : 'none';
-  if (shown === 0 && q) {
-    const tbody   = document.getElementById('booking-table-body');
-    const infoRow = tbody.insertRow(); infoRow.id = 'search-info-row';
-    const cell    = infoRow.insertCell(0); cell.colSpan = 10; cell.className = 'text-center text-muted py-3';
-    cell.innerHTML = `<i class="fa fa-search"></i> No records found matching "<strong>${esc(q)}</strong>"`;
-  }
-}
-function clearSearch() { document.getElementById('searchInput').value = ''; document.getElementById('btn-clear-search').style.display = 'none'; filterTable(); }
-
 
 // ---------- AUTOCOMPLETE ----------
 function setupAC(inputId, url, onSelect, labelFn, subFn) {
@@ -686,7 +731,6 @@ function onCodeSelect(item) {
   document.getElementById("bk-code-fullform").value = item.code_fullform || "";
   const dest = document.getElementById("bk-dest").value.trim();
   if (dest) resolveDestination(dest);
-  // Move cursor to AWB after code is selected
   setTimeout(() => document.getElementById("bk-awb").focus(), 50);
 }
 function onDestACSelect(v) { setVal("bk-dest", v); resolveDestination(v); }
@@ -843,7 +887,8 @@ async function doSaveAll() {
             const msg = `✅ Saved ${result.inserted} record(s) successfully.` + (result.errors.length ? ` ${result.errors.length} skipped (duplicates).` : '');
             importLogDiv.innerHTML = `<div class="alert alert-success py-1 mb-0">${msg}</div>`;
             closeInlinePreview();
-            loadTable(currentView);
+            allDataLoaded = false;
+            loadTable(currentView === 'all' ? 'all' : 'recent');
         } else { alert('Error: ' + (result.message || 'Unknown error')); }
     } catch (err) { alert('Network error: ' + err.message); }
     finally { [btn1,btn2].forEach(b => { b.disabled=false; b.innerHTML='<i class="fa fa-save"></i> Save All Valid Rows'; }); }
@@ -857,7 +902,6 @@ document.getElementById("bk-code").addEventListener("keydown", async (e) => {
   if (e.key === "Tab" || e.key === "Enter") {
     const code = document.getElementById("bk-code").value.trim();
     if (!code) return;
-    // Only fetch if company name not already filled
     if (!document.getElementById("bk-code-fullform").value.trim()) {
       try {
         const data = await fetch(`/api/ac/code?q=${encodeURIComponent(code)}`).then(r => r.json());
@@ -867,12 +911,20 @@ document.getElementById("bk-code").addEventListener("keydown", async (e) => {
         }
       } catch(e) {}
     }
-    // Jump to AWB on Enter (Tab already moves focus naturally)
     if (e.key === "Enter") {
       e.preventDefault();
       document.getElementById("bk-awb").focus();
     }
   }
+});
+
+// ---------- SEARCH INPUT — live search with debounce ----------
+document.getElementById('searchInput').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => triggerSearch(), 300);
+});
+document.getElementById('searchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { clearTimeout(searchTimer); triggerSearch(); }
 });
 
 // ---------- INIT ----------
@@ -886,11 +938,11 @@ document.addEventListener("DOMContentLoaded", () => {
     setupAC("bk-dest", "/api/ac/destination?q=", onDestACSelect);
 
     document.getElementById("bk-auto").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    document.getElementById("bk-form").requestSubmit();
-  }
-});
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("bk-form").requestSubmit();
+      }
+    });
 });
 </script>
 

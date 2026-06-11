@@ -631,7 +631,8 @@ def sales_checking():
             query += " AND booking_date = %s"
             params.append(single_date)
 
-        query += " GROUP BY code, code_fullform, awb_no, destination ORDER BY code"
+        # FIX: ORDER BY id DESC — newest entries appear first, not alphabetical
+        query += " GROUP BY code, code_fullform, awb_no, destination, id ORDER BY id DESC"
         cursor.execute(query, params)
         rows         = [dict(r) for r in cursor.fetchall()]
         total_amount = sum(r["amount"] for r in rows) if rows else 0
@@ -827,8 +828,10 @@ def booking_export():
 def sales_export():
     db     = get_db_connection()
     cursor = db.cursor()
+    # FIX: added weight to SELECT, GROUP BY id, ORDER BY id DESC
     query  = """SELECT code AS "Client Code", code_fullform AS "Company Name",
                        awb_no AS "AWB No", destination AS "Destination",
+                       weight AS "Weight",
                        COUNT(*) AS "Sum", SUM(total_amount) AS "Amount"
                 FROM bookings WHERE 1=1"""
     params = []
@@ -845,7 +848,8 @@ def sales_export():
     if request.form.get("date"):
         query += " AND booking_date = %s"
         params.append(request.form["date"])
-    query += " GROUP BY code, code_fullform, awb_no, destination ORDER BY code"
+    # FIX: ORDER BY id DESC — newest first, not alphabetical
+    query += " GROUP BY code, code_fullform, awb_no, destination, weight, id ORDER BY id DESC"
     cursor.execute(query, params)
     df = pd.DataFrame([dict(r) for r in cursor.fetchall()])
     output = io.BytesIO()
@@ -854,7 +858,6 @@ def sales_export():
     db.close()
     return send_file(output, as_attachment=True, download_name="Sales_Checking.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
 
 
 @app.route("/day-wise-export", methods=["POST"])
@@ -969,11 +972,8 @@ def invoice_pdf():
                                    textColor=colors.HexColor('#212529'))
 
     elements = []
-
-    # ── Main title ──
     elements.append(Paragraph("Z XPRESS", title_style))
 
-    # ── Statement of Transaction with dates ──
     if from_date and to_date:
         between_text = f"STATEMENT OF TRANSACTION BETWEEN &nbsp; {from_date} &nbsp; AND &nbsp; {to_date}"
     else:
@@ -1080,6 +1080,7 @@ def invoice_pdf():
 
     return send_file(buf, as_attachment=True, download_name=fname,
                      mimetype='application/pdf')
+
 # ============================================================
 # SALES PDF
 # ============================================================
@@ -1094,8 +1095,9 @@ def sales_pdf():
     destination = request.form.get("destination", "").strip()
     single_date = request.form.get("date", "").strip()
 
+    # FIX: added weight to SELECT, GROUP BY id, ORDER BY id DESC
     query = """
-        SELECT code, code_fullform, awb_no, destination,
+        SELECT code, code_fullform, awb_no, destination, weight,
                COUNT(*) AS sum_count, SUM(total_amount) AS amount
         FROM bookings WHERE 1=1
     """
@@ -1114,7 +1116,8 @@ def sales_pdf():
         query += " AND booking_date = %s"
         params.append(single_date)
 
-    query += " GROUP BY code, code_fullform, awb_no, destination ORDER BY code"
+    # FIX: ORDER BY id DESC — newest entries on top, not alphabetical
+    query += " GROUP BY code, code_fullform, awb_no, destination, weight, id ORDER BY id DESC"
     cursor.execute(query, params)
     rows         = [dict(r) for r in cursor.fetchall()]
     total_amount = sum(r["amount"] for r in rows) if rows else 0
@@ -1127,12 +1130,13 @@ def sales_pdf():
 
     styles       = getSampleStyleSheet()
     title_style  = ParagraphStyle('Title', parent=styles['Heading1'],
-                                  alignment=TA_CENTER, spaceAfter=10)
+                                  alignment=TA_CENTER, spaceAfter=6)
     normal_style = styles['Normal']
     name_style   = ParagraphStyle('NameStyle', parent=styles['Normal'],
                                   fontSize=9, leading=11)
 
     elements = []
+    elements.append(Paragraph("Professional Couriers", title_style))
     elements.append(Paragraph("Sales Checking Report", title_style))
 
     filter_text = []
@@ -1144,46 +1148,54 @@ def sales_pdf():
         elements.append(Paragraph(" | ".join(filter_text), normal_style))
     elements.append(Spacer(1, 12))
 
-    # ✅ Code column removed from header
-    header = ['SNO', 'Company Name', 'AWB No', 'Destination', 'Count', 'Amount (₹)']
-    data   = [header]
+    # 7 columns: SNO, Client Code, Company Name, AWB No, Destination, Weight, Amount
+    header     = ['SNO', 'Client Code', 'Company Name', 'AWB No', 'Destination', 'Weight', 'Amount (₹)']
+    col_widths = [20, 45, 125, 90, 115, 42, 73]   # total = 510pt, fits A4 (595-20-20=555)
+
+    data = [header]
 
     for i, row in enumerate(rows, start=1):
         data.append([
             str(i),
-            # ✅ Code removed, Company Name gets more space
+            row['code'] or '',
             Paragraph(row['code_fullform'] or '', name_style),
             row['awb_no'] or '',
             row['destination'] or '',
-            str(row['sum_count']),
-            f"{row['amount']:.2f}"
+            f"{float(row['weight'] or 0):.3f}",
+            f"{float(row['amount'] or 0):.2f}"
         ])
 
-    data.append(['', '', '', '', 'Total:', f"{total_amount:.2f}"])
-
-    # ✅ Widths redistributed — A4 usable width ~555pt (595 - 20 - 20)
-    col_widths = [25, 150, 110, 120, 40, 65]  # sum = 510, fits comfortably
+    # Total row — label at col 5, value at col 6
+    data.append(['', '', '', '', '', 'Total:', f"{float(total_amount):.2f}"])
 
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
-        ('BACKGROUND',    (0, 0),  (-1, 0),  colors.grey),
-        ('TEXTCOLOR',     (0, 0),  (-1, 0),  colors.whitesmoke),
+        # Header
+        ('BACKGROUND',    (0, 0),  (-1, 0),  colors.HexColor('#212529')),
+        ('TEXTCOLOR',     (0, 0),  (-1, 0),  colors.white),
         ('ALIGN',         (0, 0),  (-1, 0),  'CENTER'),
         ('FONTNAME',      (0, 0),  (-1, 0),  'Helvetica-Bold'),
-        ('FONTSIZE',      (0, 0),  (-1, 0),  10),
-        ('BOTTOMPADDING', (0, 0),  (-1, 0),  6),
+        ('FONTSIZE',      (0, 0),  (-1, 0),  9),
+        ('TOPPADDING',    (0, 0),  (-1, 0),  5),
+        ('BOTTOMPADDING', (0, 0),  (-1, 0),  5),
+        # Body
         ('BACKGROUND',    (0, 1),  (-1, -2), colors.beige),
         ('FONTNAME',      (0, 1),  (-1, -1), 'Helvetica'),
         ('FONTSIZE',      (0, 1),  (-1, -1), 9),
-        ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),   # SNO center
-        # ✅ Fixed column indices: Count=col4, Amount=col5
-        ('ALIGN',         (4, 1),  (5,  -1), 'RIGHT'),
+        ('TOPPADDING',    (0, 1),  (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 1),  (-1, -1), 3),
+        # Alignment
+        ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),  # SNO
+        ('ALIGN',         (1, 1),  (1,  -1), 'CENTER'),  # Client Code
+        ('ALIGN',         (5, 1),  (6,  -1), 'RIGHT'),   # Weight, Amount
         ('VALIGN',        (0, 0),  (-1, -1), 'MIDDLE'),
+        # Grid
         ('GRID',          (0, 0),  (-1, -2), 0.5, colors.grey),
+        # Total row
         ('LINEABOVE',     (0, -1), (-1, -1), 1,   colors.black),
-        ('BACKGROUND',    (0, -1), (-1, -1), colors.lavender),
+        ('BACKGROUND',    (0, -1), (-1, -1), colors.HexColor('#e9ecef')),
         ('FONTNAME',      (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('ALIGN',         (4, -1), (5,  -1), 'RIGHT'),    # Total row right-aligned
+        ('ALIGN',         (5, -1), (6,  -1), 'RIGHT'),
     ]))
 
     elements.append(table)
