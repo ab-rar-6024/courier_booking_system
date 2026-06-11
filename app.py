@@ -1082,30 +1082,30 @@ def invoice_pdf():
                      mimetype='application/pdf')
 
 # ============================================================
-# SALES PDF
+# SALES PDF  — matches Invoice PDF layout exactly
 # ============================================================
 @app.route("/sales-pdf", methods=["POST"])
 @login_required
 def sales_pdf():
+    def s(v):
+        return '' if v is None else str(v)
+
     db     = get_db_connection()
     cursor = db.cursor()
 
     client_code = request.form.get("client_code", "").strip()
-    awb_no      = request.form.get("awb_no", "").strip()
+    awb_no      = request.form.get("awb_no",      "").strip()
     destination = request.form.get("destination", "").strip()
-    single_date = request.form.get("date", "").strip()
+    single_date = request.form.get("date",        "").strip()
 
-    # FIX: added weight to SELECT, GROUP BY id, ORDER BY id DESC
     query = """
-        SELECT code, code_fullform, awb_no, destination, weight,
-               COUNT(*) AS sum_count, SUM(total_amount) AS amount
+        SELECT code, code_fullform, awb_no, destination, weight, total_amount
         FROM bookings WHERE 1=1
     """
     params = []
     if client_code:
         query += " AND (code ILIKE %s OR code_fullform ILIKE %s)"
-        params.append(f"%{client_code}%")
-        params.append(f"%{client_code}%")
+        params += [f"%{client_code}%", f"%{client_code}%"]
     if awb_no:
         query += " AND awb_no ILIKE %s"
         params.append(f"%{awb_no}%")
@@ -1116,94 +1116,121 @@ def sales_pdf():
         query += " AND booking_date = %s"
         params.append(single_date)
 
-    # FIX: ORDER BY id DESC — newest entries on top, not alphabetical
-    query += " GROUP BY code, code_fullform, awb_no, destination, weight, id ORDER BY id DESC"
+    query += " ORDER BY booking_date ASC, id ASC"
     cursor.execute(query, params)
-    rows         = [dict(r) for r in cursor.fetchall()]
-    total_amount = sum(r["amount"] for r in rows) if rows else 0
+    rows = [dict(r) for r in cursor.fetchall()]
     db.close()
 
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=20, rightMargin=20,
-                            topMargin=30, bottomMargin=20)
+    if not rows:
+        return "<h3 style='font-family:sans-serif;padding:2rem'>No records found for the selected filters.</h3>", 200
 
-    styles       = getSampleStyleSheet()
-    title_style  = ParagraphStyle('Title', parent=styles['Heading1'],
-                                  alignment=TA_CENTER, spaceAfter=6)
-    normal_style = styles['Normal']
-    name_style   = ParagraphStyle('NameStyle', parent=styles['Normal'],
-                                  fontSize=9, leading=11)
+    buf = io.BytesIO()
+    doc = WatermarkDocTemplate(buf, pagesize=A4,
+                               leftMargin=10*mm, rightMargin=10*mm,
+                               topMargin=12*mm, bottomMargin=12*mm)
+
+    title_style   = ParagraphStyle('title',   fontSize=13, alignment=TA_CENTER,
+                                   spaceAfter=4, fontName='Helvetica-Bold')
+    between_style = ParagraphStyle('between', fontSize=10, alignment=TA_CENTER,
+                                   spaceAfter=6, fontName='Helvetica-Bold',
+                                   textColor=colors.HexColor('#212529'))
+    cell_style    = ParagraphStyle('cell', fontSize=8, leading=10)
 
     elements = []
-    elements.append(Paragraph("Professional Couriers", title_style))
-    elements.append(Paragraph("Sales Checking Report", title_style))
+    elements.append(Paragraph("Z XPRESS", title_style))
 
-    filter_text = []
-    if client_code: filter_text.append(f"Client Code / Company: {client_code}")
-    if awb_no:      filter_text.append(f"AWB: {awb_no}")
-    if destination: filter_text.append(f"Destination: {destination}")
-    if single_date: filter_text.append(f"Date: {single_date}")
-    if filter_text:
-        elements.append(Paragraph(" | ".join(filter_text), normal_style))
-    elements.append(Spacer(1, 12))
+    if single_date:
+        between_text = f"SALES CHECKING REPORT &nbsp; — &nbsp; {single_date}"
+    else:
+        between_text = "SALES CHECKING REPORT"
+    elements.append(Paragraph(between_text, between_style))
+    elements.append(Spacer(1, 4*mm))
 
-    # 7 columns: SNO, Client Code, Company Name, AWB No, Destination, Weight, Amount
-    header     = ['SNO', 'Client Code', 'Company Name', 'AWB No', 'Destination', 'Weight', 'Amount (₹)']
-    col_widths = [20, 45, 125, 90, 115, 42, 73]   # total = 510pt, fits A4 (595-20-20=555)
+    # 7 columns: SNO | Client Code | Company Name | AWB No | Destination | Weight | Amount
+    header     = ['SNO', 'CLIENT\nCODE', 'COMPANY NAME', 'AWB NO', 'DESTINATION', 'WEIGHT', 'AMOUNT']
+    #              SNO    code          company          awb      dest           weight   amount
+    col_widths = [12*mm, 20*mm,         52*mm,          38*mm,   38*mm,         18*mm,   22*mm]
+    ROW_H      = 6*mm
+    HEADER_H   = 8*mm
 
-    data = [header]
+    data        = [header]
+    row_heights = [HEADER_H]
+    style_cmds  = []
+    row_idx     = 1
+    sno         = 0
+    sum_total   = 0.0
 
-    for i, row in enumerate(rows, start=1):
+    for r in rows:
+        sno      += 1
+        amount    = float(r["total_amount"] or 0)
+        sum_total += amount
+        bg = colors.white if (row_idx % 2 == 1) else colors.HexColor('#f8f9fa')
+        style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), bg))
         data.append([
-            str(i),
-            row['code'] or '',
-            Paragraph(row['code_fullform'] or '', name_style),
-            row['awb_no'] or '',
-            row['destination'] or '',
-            f"{float(row['weight'] or 0):.3f}",
-            f"{float(row['amount'] or 0):.2f}"
+            str(sno),
+            s(r["code"]),
+            Paragraph(s(r["code_fullform"]), cell_style),
+            s(r["awb_no"]),
+            s(r["destination"]),
+            f"{float(r['weight'] or 0):.3f}",
+            f"{amount:.2f}"
         ])
+        row_heights.append(ROW_H)
+        row_idx += 1
 
-    # Total row — label at col 5, value at col 6
-    data.append(['', '', '', '', '', 'Total:', f"{float(total_amount):.2f}"])
+    # Total row
+    data.append(['', '', '', '', '', 'Total:', f"{sum_total:.2f}"])
+    row_heights.append(ROW_H)
 
-    table = Table(data, colWidths=col_widths, repeatRows=1)
-    table.setStyle(TableStyle([
-        # Header
+    total_rows = len(data)
+
+    base_cmds = [
+        # Header styling
         ('BACKGROUND',    (0, 0),  (-1, 0),  colors.HexColor('#212529')),
         ('TEXTCOLOR',     (0, 0),  (-1, 0),  colors.white),
-        ('ALIGN',         (0, 0),  (-1, 0),  'CENTER'),
         ('FONTNAME',      (0, 0),  (-1, 0),  'Helvetica-Bold'),
-        ('FONTSIZE',      (0, 0),  (-1, 0),  9),
-        ('TOPPADDING',    (0, 0),  (-1, 0),  5),
-        ('BOTTOMPADDING', (0, 0),  (-1, 0),  5),
-        # Body
-        ('BACKGROUND',    (0, 1),  (-1, -2), colors.beige),
+        ('FONTSIZE',      (0, 0),  (-1, 0),  8),
+        ('ALIGN',         (0, 0),  (-1, 0),  'CENTER'),
+        ('VALIGN',        (0, 0),  (-1, 0),  'MIDDLE'),
+        ('TOPPADDING',    (0, 0),  (-1, 0),  4),
+        ('BOTTOMPADDING', (0, 0),  (-1, 0),  4),
+        # Body styling
+        ('FONTSIZE',      (0, 1),  (-1, -1), 8),
         ('FONTNAME',      (0, 1),  (-1, -1), 'Helvetica'),
-        ('FONTSIZE',      (0, 1),  (-1, -1), 9),
-        ('TOPPADDING',    (0, 1),  (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 1),  (-1, -1), 3),
-        # Alignment
-        ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),  # SNO
-        ('ALIGN',         (1, 1),  (1,  -1), 'CENTER'),  # Client Code
-        ('ALIGN',         (5, 1),  (6,  -1), 'RIGHT'),   # Weight, Amount
-        ('VALIGN',        (0, 0),  (-1, -1), 'MIDDLE'),
-        # Grid
-        ('GRID',          (0, 0),  (-1, -2), 0.5, colors.grey),
+        ('VALIGN',        (0, 1),  (-1, -1), 'MIDDLE'),
+        ('TOPPADDING',    (0, 1),  (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 1),  (-1, -1), 2),
+        # Column alignment
+        ('ALIGN',         (0, 1),  (0,  -1), 'CENTER'),   # SNO
+        ('ALIGN',         (1, 1),  (1,  -1), 'CENTER'),   # Client Code
+        ('ALIGN',         (2, 1),  (2,  -1), 'LEFT'),     # Company Name
+        ('ALIGN',         (3, 1),  (3,  -1), 'CENTER'),   # AWB No
+        ('ALIGN',         (4, 1),  (4,  -1), 'LEFT'),     # Destination
+        ('ALIGN',         (5, 1),  (6,  -1), 'RIGHT'),    # Weight, Amount
+        # Grid and box
+        ('GRID',          (0, 0),  (-1, total_rows - 2), 0.4, colors.grey),
+        ('BOX',           (0, 0),  (-1, -1), 0.8, colors.black),
         # Total row
-        ('LINEABOVE',     (0, -1), (-1, -1), 1,   colors.black),
-        ('BACKGROUND',    (0, -1), (-1, -1), colors.HexColor('#e9ecef')),
-        ('FONTNAME',      (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('ALIGN',         (5, -1), (6,  -1), 'RIGHT'),
-    ]))
+        ('LINEABOVE',     (0, total_rows - 1), (-1, total_rows - 1), 1.2, colors.black),
+        ('BACKGROUND',    (0, total_rows - 1), (-1, total_rows - 1), colors.HexColor('#e9ecef')),
+        ('FONTNAME',      (0, total_rows - 1), (-1, total_rows - 1), 'Helvetica-Bold'),
+        ('ALIGN',         (5, total_rows - 1), (6, total_rows - 1), 'RIGHT'),
+    ]
 
-    elements.append(table)
+    t = Table(data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+    t.setStyle(TableStyle(base_cmds + style_cmds))
+    elements.append(t)
     doc.build(elements)
     buf.seek(0)
 
-    return send_file(buf, as_attachment=True,
-                     download_name="Sales_Checking_Report.pdf",
+    fname = "Sales_Checking"
+    if single_date:
+        fname += f"_{single_date}"
+    elif client_code:
+        fname += f"_{client_code}"
+    fname += ".pdf"
+
+    return send_file(buf, as_attachment=True, download_name=fname,
                      mimetype='application/pdf')
 
 # ============================================================
