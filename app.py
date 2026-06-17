@@ -353,6 +353,16 @@ def booking_import():
             'ROI': 5, 'REST OF INDIA': 5
         }
         z = str(zone_text).strip().upper()
+
+        # Handle the case where the Excel cell already holds a valid zone
+        # number (1-5), e.g. "2" or "2.0" — this is what was missing before.
+        try:
+            num = int(float(z))
+            if 1 <= num <= 5:
+                return num
+        except (ValueError, TypeError):
+            pass
+
         for k, v in zone_map.items():
             if z == k or (k == 'CHENNAI' and z in ['CHENNAI', 'MADRAS']):
                 return v
@@ -1365,11 +1375,18 @@ def api_awb_check():
 @app.route("/api/place/save-zone", methods=["POST"])
 @login_required
 def api_place_save_zone():
-    data       = request.get_json()
-    place      = data.get("place", "").strip().upper()
-    zone       = int(data.get("zone", 5))
-    place_code = data.get("place_code", "").strip().upper() or None
-    if not place: return jsonify({"ok": False})
+    data = request.get_json() or {}
+
+    place = (data.get("place") or "").strip().upper()
+    try:
+        zone = int(data.get("zone") or 5)
+    except (TypeError, ValueError):
+        zone = 5
+    place_code = (data.get("place_code") or "").strip().upper() or None
+
+    if not place:
+        return jsonify({"ok": False})
+
     db  = get_db_connection()
     cur = db.cursor()
     cur.execute("""
